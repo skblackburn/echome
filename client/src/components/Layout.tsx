@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { EchoMeWordmark } from "./EchoMeLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Sun, Moon, LogOut, User } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,6 +17,8 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
   const [isDark, setIsDark] = useState(() =>
     window.matchMedia("(prefers-color-scheme: dark)").matches
   );
+  const [, navigate] = useLocation();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -47,7 +50,7 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
               <span className="text-sm font-medium text-muted-foreground">{title}</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {actions}
             <Button
               variant="ghost"
@@ -59,6 +62,19 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+            {user && (
+              <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-muted-foreground">
+                  <User className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline max-w-[100px] truncate">{user.name}</span>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={async () => { await logout(); navigate("/login"); }}
+                  title="Sign out">
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>

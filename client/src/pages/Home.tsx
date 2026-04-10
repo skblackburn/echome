@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MessageCircle, Heart, BookOpen, Mic } from "lucide-react";
+import { Plus, MessageCircle, Heart, BookOpen, Mic, Key } from "lucide-react";
 import type { Persona } from "@shared/schema";
 
 function PersonaCard({ persona }: { persona: Persona }) {
@@ -156,11 +156,17 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-border">
+            <div className="mt-6 pt-6 border-t border-border space-y-2">
               <Link href="/create">
                 <Button variant="outline" className="gap-2 w-full" data-testid="button-add-another">
                   <Plus className="h-4 w-4" />
                   Add another Echo
+                </Button>
+              </Link>
+              <Link href="/join">
+                <Button variant="ghost" className="gap-2 w-full text-muted-foreground" data-testid="button-join-echo">
+                  <Key className="h-4 w-4" />
+                  Join with access code
                 </Button>
               </Link>
             </div>

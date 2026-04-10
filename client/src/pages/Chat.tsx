@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Layout } from "@/components/Layout";
@@ -8,11 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EchoMeLogo } from "@/components/EchoMeLogo";
 import { useToast } from "@/hooks/use-toast";
-import { Send, BookOpen, RotateCcw } from "lucide-react";
+import { Send, BookOpen, RotateCcw, Volume2, VolumeX, Loader2, Lightbulb, UserPlus, Settings2 } from "lucide-react";
 import type { Persona, ChatMessage } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
-const CONVERSATION_STARTERS = [
+const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
+
+
+const DEFAULT_STARTERS = [
   "What do you wish you'd told me more often?",
   "What was your happiest memory?",
   "What advice would you give me about love?",
@@ -21,6 +24,82 @@ const CONVERSATION_STARTERS = [
   "What made you laugh?",
   "What are you most proud of in your life?",
 ];
+
+function getPersonaStarters(persona: Persona | undefined): string[] {
+  if (!persona) return DEFAULT_STARTERS;
+  const starters: string[] = [];
+  const name = persona.name?.split(" ")[0] || "you";
+  const p = persona as any;
+
+  if (p.favoritePlace || p.hometown) starters.push(`Tell me about your favorite place.`);
+  if (p.catchphrase) starters.push(`Where did "${p.catchphrase?.slice(0, 40)}" come from?`);
+  if (p.spouse) starters.push(`Tell me about the love of your life.`);
+  if (p.children) {
+    try {
+      const kids = JSON.parse(p.children);
+      if (kids.length > 0) starters.push(`What do you most want ${kids[0].name} to know?`);
+    } catch (_) {}
+  }
+  if (p.proudestMoment) starters.push(`What moment in your life made you most proud?`);
+  if (p.hardestPeriod) starters.push(`What was the hardest thing you ever got through?`);
+  if (p.wishForFamily) starters.push(`What do you most wish for us?`);
+  if (p.career) starters.push(`Tell me about your work and what it meant to you.`);
+  if (p.loveLanguage) starters.push(`How did you show people you loved them?`);
+
+  // Fill with defaults if not enough persona-specific starters
+  const combined = [...starters, ...DEFAULT_STARTERS];
+  return combined.slice(0, 6);
+}
+
+function SpeakButton({ text }: { text: string }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const speak = async () => {
+    if (isPlaying) {
+      audioRef.current?.pause();
+      setIsPlaying(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/speak", { text });
+      const data = await res.json() as { audio: string; mimeType: string };
+      const byteChars = atob(data.audio);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: data.mimeType });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => { setIsPlaying(false); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setIsPlaying(false); URL.revokeObjectURL(url); };
+      await audio.play();
+      setIsPlaying(true);
+    } catch (_e) {
+      // Voice not configured or unavailable — silently ignore
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={speak}
+      className="flex-shrink-0 p-1 rounded-md text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+      title={isPlaying ? "Stop" : "Listen"}
+    >
+      {isLoading ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : isPlaying ? (
+        <VolumeX className="h-3.5 w-3.5" />
+      ) : (
+        <Volume2 className="h-3.5 w-3.5" />
+      )}
+    </button>
+  );
+}
 
 function MessageBubble({ message, personaName }: { message: ChatMessage; personaName: string }) {
   const isUser = message.role === "user";
@@ -50,6 +129,12 @@ function MessageBubble({ message, personaName }: { message: ChatMessage; persona
         >
           {message.content}
         </div>
+        {/* Voice playback for assistant messages */}
+        {!isUser && (
+          <div className="px-1">
+            <SpeakButton text={message.content} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -58,25 +143,40 @@ function MessageBubble({ message, personaName }: { message: ChatMessage; persona
 export default function Chat() {
   const { id } = useParams<{ id: string }>();
   const personaId = parseInt(id);
+  const searchStr = useSearch();
+  const viewerCode = new URLSearchParams(searchStr).get("viewer") || undefined;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState("");
-  const [showStarters, setShowStarters] = useState(true);
+  const [showStarters, setShowStarters] = useState(false);
 
   const { data: persona } = useQuery<Persona>({
     queryKey: ["/api/personas", personaId],
     queryFn: async () => {
-      const res = await fetch(`/api/personas/${personaId}`);
+      const res = await fetch(`${API_BASE}/api/personas/${personaId}`);
       return res.json();
     },
   });
 
+  // Also load life story for smart starters
+  const { data: lifeStoryData } = useQuery({
+    queryKey: ["/api/personas", personaId, "life-story"],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/personas/${personaId}/life-story`);
+      return res.json();
+    },
+  });
+
+  const enrichedPersona = persona && lifeStoryData
+    ? { ...persona, ...lifeStoryData }
+    : persona;
+
   const { data: messages = [], isLoading: messagesLoading } = useQuery<ChatMessage[]>({
     queryKey: ["/api/personas", personaId, "chat"],
     queryFn: async () => {
-      const res = await fetch(`/api/personas/${personaId}/chat`);
+      const res = await fetch(`${API_BASE}/api/personas/${personaId}/chat`);
       return res.json();
     },
     refetchInterval: false,
@@ -84,7 +184,7 @@ export default function Chat() {
 
   const sendMutation = useMutation({
     mutationFn: (message: string) =>
-      apiRequest("POST", `/api/personas/${personaId}/chat`, { message }),
+      apiRequest("POST", `/api/personas/${personaId}/chat`, { message, viewerCode }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "chat"] });
       setShowStarters(false);
@@ -108,9 +208,9 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sendMutation.isPending]);
 
-  // Hide starters once there are messages
+  // Show starters only when no messages
   useEffect(() => {
-    if (messages.length > 0) setShowStarters(false);
+    setShowStarters(messages.length === 0);
   }, [messages]);
 
   const handleSend = () => {
@@ -140,30 +240,64 @@ export default function Chat() {
       <header className="flex-shrink-0 sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href={`/persona/${personaId}`}>
-              <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 text-muted-foreground hover:text-foreground text-sm">
-                ← {persona?.name || "Back"}
-              </Button>
-            </Link>
+            {!viewerCode ? (
+              <Link href={`/persona/${personaId}`}>
+                <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 text-muted-foreground hover:text-foreground text-sm">
+                  ← {persona?.name || "Back"}
+                </Button>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2 -ml-1">
+                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center">
+                  <EchoMeLogo size={12} className="text-primary" />
+                </div>
+                <span className="text-sm font-medium text-foreground">{persona?.name?.split(" ")[0]}</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/persona/${personaId}/memories`}>
-              <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
-                <BookOpen className="h-3.5 w-3.5" />
-                Add memories
-              </Button>
-            </Link>
-            <Button
-              variant="ghost"
-              size="sm"
+            {viewerCode ? (
+              <Link href={`/persona/${personaId}/contribute?viewer=${viewerCode}`}>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Add memory</span>
+                </Button>
+              </Link>
+            ) : (
+              <Link href={`/persona/${personaId}/memories`}>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Add memories</span>
+                </Button>
+              </Link>
+            )}
+            <Button variant="ghost" size="sm"
               className="gap-1.5 text-xs text-muted-foreground"
-              onClick={() => clearMutation.mutate()}
-              disabled={messages.length === 0 || clearMutation.isPending}
-              data-testid="button-clear-chat"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Clear
+              onClick={() => setShowStarters(s => !s)}
+              title="Conversation suggestions">
+              <Lightbulb className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Suggest</span>
             </Button>
+            {!viewerCode && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs text-muted-foreground"
+                onClick={() => clearMutation.mutate()}
+                disabled={messages.length === 0 || clearMutation.isPending}
+                data-testid="button-clear-chat"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Clear</span>
+              </Button>
+            )}
+            {viewerCode && (
+              <Link href={`/persona/${personaId}/contributor-settings?viewer=${viewerCode}`}>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground" title="Content settings">
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -194,12 +328,12 @@ export default function Chat() {
             </div>
           )}
 
-          {/* Conversation starters */}
-          {showStarters && messages.length === 0 && (
+          {/* Conversation starters — shown when no messages, collapsible when there are messages */}
+          {messages.length === 0 && (
             <div className="pt-2">
               <p className="text-xs font-medium text-muted-foreground mb-2.5 text-center">Things you might ask</p>
               <div className="flex flex-col gap-2">
-                {CONVERSATION_STARTERS.map(s => (
+                {getPersonaStarters(enrichedPersona as Persona).map(s => (
                   <button
                     key={s}
                     type="button"
@@ -212,6 +346,17 @@ export default function Chat() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+          {/* Collapsed starters button when conversation is active */}
+          {messages.length > 0 && showStarters && (
+            <div className="flex flex-wrap gap-1.5 py-2">
+              {getPersonaStarters(enrichedPersona as Persona).slice(0, 3).map(s => (
+                <button key={s} type="button" onClick={() => { useStarter(s); setShowStarters(false); }}
+                  className="text-xs px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 hover:border-primary/30 text-muted-foreground hover:text-foreground transition-all">
+                  {s}
+                </button>
+              ))}
             </div>
           )}
 
