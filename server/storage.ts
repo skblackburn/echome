@@ -134,15 +134,36 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS milestone_messages (
       id SERIAL PRIMARY KEY,
       persona_id INTEGER NOT NULL,
-      recipient_name TEXT NOT NULL,
+      user_id INTEGER,
+      title TEXT NOT NULL,
       occasion TEXT NOT NULL,
-      delivery_date TEXT NOT NULL,
-      message_type TEXT NOT NULL DEFAULT 'ai',
-      prewritten_content TEXT,
-      delivered BOOLEAN DEFAULT FALSE,
-      delivered_content TEXT,
-      created_at TIMESTAMP DEFAULT NOW()
+      recipient_name TEXT NOT NULL,
+      recipient_email TEXT,
+      message_prompt TEXT,
+      generated_message TEXT,
+      scheduled_date TEXT NOT NULL,
+      scheduled_time TEXT NOT NULL DEFAULT '09:00',
+      timezone TEXT DEFAULT 'America/New_York',
+      is_recurring BOOLEAN DEFAULT FALSE,
+      status TEXT NOT NULL DEFAULT 'scheduled',
+      delivered_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  // Migrate old milestone_messages table to new schema (add columns if they don't exist)
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS title TEXT`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS recipient_email TEXT`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS message_prompt TEXT`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS generated_message TEXT`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS scheduled_date TEXT`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS scheduled_time TEXT NOT NULL DEFAULT '09:00'`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'America/New_York'`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS is_recurring BOOLEAN DEFAULT FALSE`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'scheduled'`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS family_members (
@@ -230,11 +251,13 @@ export interface IStorage {
 
   // Milestones
   getMilestones(personaId: number): Promise<Milestone[]>;
+  getMilestonesByUser(userId: number): Promise<Milestone[]>;
   getMilestone(id: number): Promise<Milestone | undefined>;
   createMilestone(data: InsertMilestone): Promise<Milestone>;
   updateMilestone(id: number, data: Partial<Milestone>): Promise<Milestone | undefined>;
   deleteMilestone(id: number): Promise<void>;
   getDueMilestones(): Promise<Milestone[]>;
+  getActiveMilestoneCountByUser(userId: number): Promise<number>;
 
   // Family Members
   getFamilyMembers(personaId: number): Promise<FamilyMember[]>;
@@ -385,7 +408,10 @@ export class PgStorage implements IStorage {
 
   // ── Milestones ────────────────────────────────────────────────────────────
   async getMilestones(personaId: number): Promise<Milestone[]> {
-    return db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.personaId, personaId)).orderBy(schema.milestoneMessages.deliveryDate);
+    return db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.personaId, personaId)).orderBy(schema.milestoneMessages.scheduledDate);
+  }
+  async getMilestonesByUser(userId: number): Promise<Milestone[]> {
+    return db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.userId, userId)).orderBy(schema.milestoneMessages.scheduledDate);
   }
   async getMilestone(id: number): Promise<Milestone | undefined> {
     return db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.id, id)).then(r => r[0]);
@@ -395,7 +421,7 @@ export class PgStorage implements IStorage {
     return m;
   }
   async updateMilestone(id: number, data: Partial<Milestone>): Promise<Milestone | undefined> {
-    const [m] = await db.update(schema.milestoneMessages).set(data).where(eq(schema.milestoneMessages.id, id)).returning();
+    const [m] = await db.update(schema.milestoneMessages).set({ ...data, updatedAt: new Date() }).where(eq(schema.milestoneMessages.id, id)).returning();
     return m;
   }
   async deleteMilestone(id: number): Promise<void> {
@@ -403,8 +429,12 @@ export class PgStorage implements IStorage {
   }
   async getDueMilestones(): Promise<Milestone[]> {
     const today = new Date().toISOString().split("T")[0];
-    const all = await db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.delivered, false));
-    return all.filter(m => m.deliveryDate <= today);
+    const all = await db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.status, "scheduled"));
+    return all.filter(m => m.scheduledDate <= today);
+  }
+  async getActiveMilestoneCountByUser(userId: number): Promise<number> {
+    const all = await db.select().from(schema.milestoneMessages).where(eq(schema.milestoneMessages.userId, userId));
+    return all.filter(m => m.status === "scheduled").length;
   }
 
   // ── Family Members ────────────────────────────────────────────────────────

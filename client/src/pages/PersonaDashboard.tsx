@@ -28,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 interface PersonaSummary { persona: Persona; traits: Trait[]; memories: Memory[]; media: Media[]; }
-interface Milestone { id: number; recipientName: string; occasion: string; deliveryDate: string; delivered: boolean; }
+interface Milestone { id: number; recipientName: string; occasion: string; title: string; scheduledDate: string; status: string; }
 
 function StatCard({ icon: Icon, label, count, color }: { icon: React.ElementType; label: string; count: number; color: string; }) {
   return (
@@ -161,8 +161,8 @@ export default function PersonaDashboard() {
   const storyCount = memories.filter(m => m.type !== "document").length;
 
   const today = new Date().toISOString().split("T")[0];
-  const dueMilestones = milestones.filter(m => !m.delivered && m.deliveryDate <= today);
-  const upcomingMilestones = milestones.filter(m => !m.delivered && m.deliveryDate > today);
+  const dueMilestones = milestones.filter(m => m.status === "scheduled" && m.scheduledDate <= today);
+  const upcomingMilestones = milestones.filter(m => m.status === "scheduled" && m.scheduledDate > today);
 
   const traitsByCategory: Record<string, string[]> = {};
   traits.forEach(t => {
