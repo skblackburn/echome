@@ -18,6 +18,7 @@ import ContributorSettings from "@/pages/ContributorSettings";
 import Milestones from "@/pages/Milestones";
 import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
+import UploadGuidance from "@/pages/UploadGuidance";
 import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
 import Login from "@/pages/Login";
@@ -63,6 +64,7 @@ function AppRoutes() {
         <Route path="/create">{() => <ProtectedRoute component={CreatePersona} />}</Route>
         <Route path="/persona/:id">{() => <ProtectedRoute component={PersonaDashboard} />}</Route>
         <Route path="/persona/:id/memories">{() => <ProtectedRoute component={MemoryIntake} />}</Route>
+        <Route path="/persona/:id/upload-guidance">{() => <ProtectedRoute component={UploadGuidance} />}</Route>
         <Route path="/persona/:id/interview">{() => <ProtectedRoute component={Interview} />}</Route>
         <Route path="/persona/:id/life-story">{() => <ProtectedRoute component={LifeStory} />}</Route>
         <Route path="/persona/:id/edit">{() => <ProtectedRoute component={EditPersona} />}</Route>
