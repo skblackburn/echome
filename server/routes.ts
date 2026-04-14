@@ -306,6 +306,25 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ error: "Not authenticated" });
 }
 
+// Ownership verification helper — checks that the persona belongs to the authenticated user
+async function verifyPersonaOwnership(req: Request, res: Response): Promise<import("@shared/schema").Persona | null> {
+  const personaId = parseInt(req.params.id);
+  if (isNaN(personaId)) {
+    res.status(400).json({ error: "Invalid persona ID" });
+    return null;
+  }
+  const persona = await storage.getPersona(personaId);
+  if (!persona) {
+    res.status(404).json({ error: "Persona not found" });
+    return null;
+  }
+  if (persona.userId !== req.user!.id) {
+    res.status(403).json({ error: "Not authorized" });
+    return null;
+  }
+  return persona;
+}
+
 // ── Stripe Webhook (must be registered before JSON body parser) ──────────────
 export function registerStripeWebhook(app: Express) {
   app.post("/api/stripe-webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
@@ -720,41 +739,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PERSONA ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas", async (req, res) => {
-    // If authenticated, return only their personas; otherwise return all (legacy)
-    if (req.isAuthenticated()) {
-      const personas = await storage.getPersonasByUser(req.user!.id);
-      return res.json(personas);
-    }
-    const personas = await storage.getPersonas();
+  app.get("/api/personas", requireAuth, async (req, res) => {
+    const personas = await storage.getPersonasByUser(req.user!.id);
     res.json(personas);
   });
 
-  app.get("/api/personas/:id", async (req, res) => {
-    const id = parseInt(req.params.id);
-    const persona = await storage.getPersona(id);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
+  app.get("/api/personas/:id", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     res.json(persona);
   });
 
-  app.post("/api/personas", upload.single("photo"), async (req, res) => {
+  app.post("/api/personas", requireAuth, upload.single("photo"), async (req, res) => {
     try {
       // Tier enforcement: check echo count vs plan limit
-      if (req.isAuthenticated()) {
-        const user = await storage.getUserById(req.user!.id);
-        if (user) {
-          const plan = user.plan || "free";
-          const limits = PLAN_LIMITS[plan];
-          const existingPersonas = await storage.getPersonasByUser(user.id);
-          if (existingPersonas.length >= limits.echoes) {
-            return res.status(403).json({
-              error: `You've reached your Echo limit (${limits.echoes}) on the ${plan} plan. Upgrade to create more.`,
-              code: "ECHO_LIMIT",
-              currentCount: existingPersonas.length,
-              limit: limits.echoes,
-              plan,
-            });
-          }
+      const user = await storage.getUserById(req.user!.id);
+      if (user) {
+        const plan = user.plan || "free";
+        const limits = PLAN_LIMITS[plan];
+        const existingPersonas = await storage.getPersonasByUser(user.id);
+        if (existingPersonas.length >= limits.echoes) {
+          return res.status(403).json({
+            error: `You've reached your Echo limit (${limits.echoes}) on the ${plan} plan. Upgrade to create more.`,
+            code: "ECHO_LIMIT",
+            currentCount: existingPersonas.length,
+            limit: limits.echoes,
+            plan,
+          });
         }
       }
 
@@ -773,7 +784,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         creatorNote: body.creatorNote || null,
         spouse: body.spouse || null,
         children: body.children || null,
-        userId: req.isAuthenticated() ? req.user!.id : null,
+        userId: req.user!.id,
       });
       const persona = await storage.createPersona(data);
       res.status(201).json(persona);
@@ -782,8 +793,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.patch("/api/personas/:id", upload.single("photo"), async (req, res) => {
-    const id = parseInt(req.params.id);
+  app.patch("/api/personas/:id", requireAuth, upload.single("photo"), async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     const b = req.body;
     const updates: Record<string, unknown> = {};
     if (req.file) updates.photo = req.file.filename;
@@ -794,9 +806,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     fields.forEach(f => { if (b[f] !== undefined) updates[f] = b[f] || null; });
     // Handle booleans
     if (b.selfMode !== undefined) updates.selfMode = b.selfMode === "true" || b.selfMode === true;
-    const persona = await storage.updatePersona(id, updates);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
-    res.json(persona);
+    const updated = await storage.updatePersona(persona.id, updates);
+    if (!updated) return res.status(404).json({ error: "Persona not found" });
+    res.json(updated);
   });
 
   app.delete("/api/personas/:id", requireAuth, async (req, res) => {
@@ -819,16 +831,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // TRAITS ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/traits", async (req, res) => {
-    const traits = await storage.getTraits(parseInt(req.params.id));
+  app.get("/api/personas/:id/traits", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const traits = await storage.getTraits(persona.id);
     res.json(traits);
   });
 
-  app.post("/api/personas/:id/traits", async (req, res) => {
+  app.post("/api/personas/:id/traits", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     try {
       const data = insertTraitSchema.parse({
         ...req.body,
-        personaId: parseInt(req.params.id),
+        personaId: persona.id,
       });
       const trait = await storage.createTrait(data);
       res.status(201).json(trait);
@@ -838,15 +854,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Bulk replace traits for a persona
-  app.put("/api/personas/:id/traits", async (req, res) => {
-    const personaId = parseInt(req.params.id);
+  app.put("/api/personas/:id/traits", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     const { traits } = req.body as { traits: { category: string; content: string }[] };
-    const created = await storage.bulkReplaceTrait(personaId, traits.map(t => ({ personaId, ...t })));
+    const created = await storage.bulkReplaceTrait(persona.id, traits.map(t => ({ personaId: persona.id, ...t })));
     res.json(created);
   });
 
-  app.delete("/api/traits/:id", async (req, res) => {
-    await storage.deleteTrait(parseInt(req.params.id));
+  app.delete("/api/traits/:id", requireAuth, async (req, res) => {
+    // Verify the trait belongs to a persona owned by this user
+    const traitId = parseInt(req.params.id);
+    const traits = await storage.getTraits(0); // We need to find which persona owns this trait
+    // Since there's no getTraitById, look up the trait's persona via all user's personas
+    const userPersonas = await storage.getPersonasByUser(req.user!.id);
+    const userPersonaIds = new Set(userPersonas.map(p => p.id));
+    let found = false;
+    for (const p of userPersonas) {
+      const pTraits = await storage.getTraits(p.id);
+      if (pTraits.some(t => t.id === traitId)) { found = true; break; }
+    }
+    if (!found) return res.status(403).json({ error: "Not authorized" });
+    await storage.deleteTrait(traitId);
     res.json({ success: true });
   });
 
@@ -854,16 +883,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MEMORY ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/memories", async (req, res) => {
-    const memories = await storage.getMemories(parseInt(req.params.id));
+  app.get("/api/personas/:id/memories", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const memories = await storage.getMemories(persona.id);
     res.json(memories);
   });
 
-  app.post("/api/personas/:id/memories", async (req, res) => {
+  app.post("/api/personas/:id/memories", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     try {
       const data = insertMemorySchema.parse({
         ...req.body,
-        personaId: parseInt(req.params.id),
+        personaId: persona.id,
       });
       const memory = await storage.createMemory(data);
       res.status(201).json(memory);
@@ -872,14 +905,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.patch("/api/memories/:id", async (req, res) => {
-    const memory = await storage.updateMemory(parseInt(req.params.id), req.body);
+  app.patch("/api/memories/:id", requireAuth, async (req, res) => {
+    const memoryId = parseInt(req.params.id);
+    const memory = await storage.getMemoryById(memoryId);
     if (!memory) return res.status(404).json({ error: "Memory not found" });
-    res.json(memory);
+    // Verify the memory's persona belongs to this user
+    const persona = await storage.getPersona(memory.personaId);
+    if (!persona || persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    const updated = await storage.updateMemory(memoryId, req.body);
+    res.json(updated);
   });
 
-  app.delete("/api/memories/:id", async (req, res) => {
-    await storage.deleteMemory(parseInt(req.params.id));
+  app.delete("/api/memories/:id", requireAuth, async (req, res) => {
+    const memoryId = parseInt(req.params.id);
+    const memory = await storage.getMemoryById(memoryId);
+    if (!memory) return res.status(404).json({ error: "Memory not found" });
+    // Verify the memory's persona belongs to this user
+    const persona = await storage.getPersona(memory.personaId);
+    if (!persona || persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    await storage.deleteMemory(memoryId);
     res.json({ success: true });
   });
 
@@ -887,16 +931,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MEDIA ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/media", async (req, res) => {
-    const mediaList = await storage.getMedia(parseInt(req.params.id));
+  app.get("/api/personas/:id/media", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const mediaList = await storage.getMedia(persona.id);
     res.json(mediaList);
   });
 
-  app.post("/api/personas/:id/media", upload.single("file"), async (req, res) => {
+  app.post("/api/personas/:id/media", requireAuth, upload.single("file"), async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     try {
       const mediaItem = await storage.createMedia({
-        personaId: parseInt(req.params.id),
+        personaId: persona.id,
         type: req.body.type || "document",
         filename: req.file.filename,
         originalName: req.file.originalname,
@@ -908,8 +956,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  app.delete("/api/media/:id", async (req, res) => {
-    await storage.deleteMedia(parseInt(req.params.id));
+  app.delete("/api/media/:id", requireAuth, async (req, res) => {
+    const mediaId = parseInt(req.params.id);
+    // Find which persona this media belongs to and verify ownership
+    const userPersonas = await storage.getPersonasByUser(req.user!.id);
+    let found = false;
+    for (const p of userPersonas) {
+      const mediaList = await storage.getMedia(p.id);
+      if (mediaList.some(m => m.id === mediaId)) { found = true; break; }
+    }
+    if (!found) return res.status(403).json({ error: "Not authorized" });
+    await storage.deleteMedia(mediaId);
     res.json({ success: true });
   });
 
@@ -917,10 +974,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // DOCUMENT IMPORT
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.post("/api/personas/:id/documents", upload.single("file"), async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const persona = await storage.getPersona(personaId);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
+  app.post("/api/personas/:id/documents", requireAuth, upload.single("file"), async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const personaId = persona.id;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     const { originalname, mimetype, path: filePath, size } = req.file;
@@ -1065,18 +1122,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // WRITING STYLE ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/writing-style", async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const persona = await storage.getPersona(personaId);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
-    const style = await storage.getWritingStyle(personaId);
+  app.get("/api/personas/:id/writing-style", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const style = await storage.getWritingStyle(persona.id);
     res.json(style || {});
   });
 
-  app.post("/api/personas/:id/analyze-style", async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const persona = await storage.getPersona(personaId);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
+  app.post("/api/personas/:id/analyze-style", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const personaId = persona.id;
     if (!openai) return res.status(503).json({ error: "OpenAI not configured" });
 
     const memories = await storage.getMemories(personaId);
@@ -1097,13 +1153,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // CHAT ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/chat", async (req, res) => {
-    const history = await storage.getChatHistory(parseInt(req.params.id));
+  app.get("/api/personas/:id/chat", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const history = await storage.getChatHistory(persona.id);
     res.json(history);
   });
 
-  app.post("/api/personas/:id/chat", async (req, res) => {
+  app.post("/api/personas/:id/chat", requireAuth, async (req, res) => {
     const personaId = parseInt(req.params.id);
+    // Verify persona ownership
+    const ownerPersona = await storage.getPersona(personaId);
+    if (!ownerPersona) return res.status(404).json({ error: "Persona not found" });
+    if (ownerPersona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
     const { message, viewerCode } = req.body as { message: string; viewerCode?: string };
 
     if (!message?.trim()) {
@@ -1111,20 +1174,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     // Tier enforcement: check message limit for free tier users
-    if (req.isAuthenticated()) {
-      const user = await storage.getUserById(req.user!.id);
-      if (user) {
-        const plan = user.plan || "free";
-        const limits = PLAN_LIMITS[plan];
-        if (limits.messages !== null && (user.totalMessagesSent ?? 0) >= limits.messages) {
-          return res.status(403).json({
-            error: `You've used all ${limits.messages} free messages. Upgrade for unlimited messaging.`,
-            code: "MESSAGE_LIMIT",
-            currentCount: user.totalMessagesSent ?? 0,
-            limit: limits.messages,
-            plan,
-          });
-        }
+    const user = await storage.getUserById(req.user!.id);
+    if (user) {
+      const plan = user.plan || "free";
+      const limits = PLAN_LIMITS[plan];
+      if (limits.messages !== null && (user.totalMessagesSent ?? 0) >= limits.messages) {
+        return res.status(403).json({
+          error: `You've used all ${limits.messages} free messages. Upgrade for unlimited messaging.`,
+          code: "MESSAGE_LIMIT",
+          currentCount: user.totalMessagesSent ?? 0,
+          limit: limits.messages,
+          plan,
+        });
       }
     }
 
@@ -1217,15 +1278,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
 
     // Increment message count for tier tracking
-    if (req.isAuthenticated()) {
-      await storage.incrementMessageCount(req.user!.id);
-    }
+    await storage.incrementMessageCount(req.user!.id);
 
     res.json({ message: assistantMsg });
   });
 
-  app.delete("/api/personas/:id/chat", async (req, res) => {
-    await storage.clearChatHistory(parseInt(req.params.id));
+  app.delete("/api/personas/:id/chat", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    await storage.clearChatHistory(persona.id);
     res.json({ success: true });
   });
 
@@ -1233,17 +1294,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // LIFE STORY ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/life-story", async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const lifeStory = await storage.getLifeStory(personaId);
+  app.get("/api/personas/:id/life-story", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const lifeStory = await storage.getLifeStory(persona.id);
     res.json(lifeStory || {});
   });
 
-  app.put("/api/personas/:id/life-story", async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const persona = await storage.getPersona(personaId);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
-    const lifeStory = await storage.upsertLifeStory(personaId, req.body);
+  app.put("/api/personas/:id/life-story", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const lifeStory = await storage.upsertLifeStory(persona.id, req.body);
     res.json(lifeStory);
   });
 
@@ -1517,22 +1578,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // FAMILY SHARING
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/family", async (req, res) => {
-    res.json(await storage.getFamilyMembers(parseInt(req.params.id)));
+  app.get("/api/personas/:id/family", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    res.json(await storage.getFamilyMembers(persona.id));
   });
 
-  app.post("/api/personas/:id/family", async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const persona = await storage.getPersona(personaId);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
+  app.post("/api/personas/:id/family", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
     // Generate a simple 6-char access code
     const accessCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const member = await storage.createFamilyMember({ ...req.body, personaId, accessCode });
+    const member = await storage.createFamilyMember({ ...req.body, personaId: persona.id, accessCode });
     res.status(201).json(member);
   });
 
-  app.delete("/api/family/:id", async (req, res) => {
-    await storage.deleteFamilyMember(parseInt(req.params.id));
+  app.delete("/api/family/:id", requireAuth, async (req, res) => {
+    const familyId = parseInt(req.params.id);
+    // Verify the family member belongs to a persona owned by this user
+    const userPersonas = await storage.getPersonasByUser(req.user!.id);
+    let found = false;
+    for (const p of userPersonas) {
+      const members = await storage.getFamilyMembers(p.id);
+      if (members.some(m => m.id === familyId)) { found = true; break; }
+    }
+    if (!found) return res.status(403).json({ error: "Not authorized" });
+    await storage.deleteFamilyMember(familyId);
     res.json({ success: true });
   });
 
@@ -1547,8 +1618,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // Get contributors for a persona
-  app.get("/api/personas/:id/contributors", async (req, res) => {
-    res.json(await storage.getContributors(parseInt(req.params.id)));
+  app.get("/api/personas/:id/contributors", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    res.json(await storage.getContributors(persona.id));
   });
 
   // Update filter settings for a family member
@@ -1660,14 +1733,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PERSONA SUMMARY (all data in one request)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/summary", async (req, res) => {
-    const personaId = parseInt(req.params.id);
-    const persona = await storage.getPersona(personaId);
-    if (!persona) return res.status(404).json({ error: "Persona not found" });
+  app.get("/api/personas/:id/summary", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
 
-    const traits = await storage.getTraits(personaId);
-    const memories = await storage.getMemories(personaId);
-    const mediaList = await storage.getMedia(personaId);
+    const traits = await storage.getTraits(persona.id);
+    const memories = await storage.getMemories(persona.id);
+    const mediaList = await storage.getMedia(persona.id);
 
     res.json({ persona, traits, memories, media: mediaList });
   });
