@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen, Brain, Mic, Plus, Trash2,
-  Upload, X, ChevronRight, MessageSquare, FileText
+  Upload, X, ChevronRight, MessageSquare, FileText, HelpCircle
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
@@ -567,12 +567,25 @@ export default function MemoryIntake() {
     <Layout backTo={`/persona/${personaId}`} backLabel={persona?.name || "Back"} title="Memory Intake">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <h1 className="font-display text-xl font-semibold text-foreground mb-1">
-            Build {firstName}'s Echo
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Add personality traits, memories, and recordings. The more you add, the more authentic the conversations become.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-xl font-semibold text-foreground mb-1">
+                Build {firstName}'s Echo
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Add personality traits, memories, and recordings. The more you add, the more authentic the conversations become.
+              </p>
+            </div>
+            <Link href={`/persona/${personaId}/upload-guidance`}>
+              <button
+                type="button"
+                className="flex-shrink-0 p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Upload tips & guidance"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            </Link>
+          </div>
         </div>
 
         {/* CTA cards */}
