@@ -20,8 +20,12 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/");
+      const u = await login(email, password);
+      if (u.status === "cancelled") {
+        navigate("/reactivate");
+      } else {
+        navigate("/");
+      }
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {

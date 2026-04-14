@@ -349,6 +349,11 @@ export function registerStripeWebhook(app: Express) {
                 planInterval: planInfo.interval,
                 planExpiresAt: new Date(sub.current_period_end * 1000),
               });
+              // Reactivate if user was cancelled
+              if (user.status === "cancelled") {
+                await storage.updateUserStatus(user.id, "active");
+                console.log(`Reactivated cancelled user ${user.id}`);
+              }
               console.log(`Activated ${planInfo.plan} plan for user ${user.id}`);
             }
           }
@@ -477,12 +482,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/auth/login", async (req, res, next) => {
-    passport.authenticate("local", (err: any, user: Express.User | false, info: any) => {
+    passport.authenticate("local", async (err: any, user: Express.User | false, info: any) => {
       if (err) return next(err);
       if (!user) return res.status(401).json({ error: info?.message || "Invalid credentials" });
-      req.login(user, err => {
+      req.login(user, async (err) => {
         if (err) return next(err);
-        res.json({ id: user.id, email: user.email, name: user.name });
+        // Check if user is cancelled — return status so frontend can redirect
+        const fullUser = await storage.getUserById(user.id);
+        const status = fullUser?.status || "active";
+        res.json({ id: user.id, email: user.email, name: user.name, status });
       });
     })(req, res, next);
   });
@@ -493,7 +501,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/auth/me", async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
-    res.json({ id: req.user!.id, email: req.user!.email, name: req.user!.name });
+    const fullUser = await storage.getUserById(req.user!.id);
+    const status = fullUser?.status || "active";
+    res.json({ id: req.user!.id, email: req.user!.email, name: req.user!.name, status });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -610,6 +620,90 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACCOUNT MANAGEMENT ROUTES (Cancel / Delete)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  app.post("/api/account/cancel", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    try {
+      // Cancel Stripe subscription if active
+      if (stripe && user.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        } catch (stripeErr) {
+          console.warn(`Stripe cancel failed for user ${user.id}:`, stripeErr);
+        }
+        await storage.updateUserSubscription(user.id, {
+          stripeSubscriptionId: null,
+          plan: "free",
+          planInterval: null,
+          planExpiresAt: null,
+        });
+      }
+
+      // Set user status to cancelled
+      await storage.updateUserStatus(user.id, "cancelled");
+
+      // Revoke session
+      req.logout(() => {
+        req.session.destroy(() => {
+          res.json({ success: true, message: "Account cancelled. You can reactivate anytime." });
+        });
+      });
+    } catch (err) {
+      console.error(`Account cancel failed for user ${user.id}:`, err);
+      res.status(500).json({ error: "Failed to cancel account" });
+    }
+  });
+
+  app.post("/api/account/delete", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Log deletion event before purging
+    console.log(`[ACCOUNT_DELETE] User ${user.id} (${user.email}) requested full account deletion at ${new Date().toISOString()}`);
+
+    try {
+      // 1. Cancel Stripe subscription if active
+      if (stripe && user.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(user.stripeSubscriptionId);
+        } catch (stripeErr) {
+          console.warn(`Stripe cancel failed for user ${user.id}:`, stripeErr);
+        }
+      }
+
+      // 2. Delete all user data (conversations, memories, personas, etc.)
+      await storage.deleteAllUserData(user.id);
+
+      // 3. Delete user profile
+      await storage.deleteUser(user.id);
+
+      // 4. Revoke session
+      req.logout(() => {
+        req.session.destroy(() => {
+          res.json({ success: true, message: "Account and all data permanently deleted." });
+        });
+      });
+    } catch (err) {
+      console.error(`Account delete failed for user ${user.id}:`, err);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
+  // Reactivate a cancelled account (set status back to active)
+  app.post("/api/account/reactivate", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.status !== "cancelled") return res.status(400).json({ error: "Account is not cancelled" });
+
+    await storage.updateUserStatus(user.id, "active");
+    res.json({ success: true, message: "Account reactivated" });
   });
 
   // ── Serve uploaded files ────────────────────────────────────────────────────
