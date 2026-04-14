@@ -50,11 +50,12 @@ const upload = multer({
 // OpenAI client (gracefully handle missing key)
 let openai: OpenAI | null = null;
 try {
-  if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openaiKey = process.env.OPENAI_KEY || process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    openai = new OpenAI({ apiKey: openaiKey });
     console.log("OpenAI client ready");
   } else {
-    console.warn("OPENAI_API_KEY not set — chat will use demo responses");
+    console.warn("OPENAI_KEY not set — chat will use demo responses");
   }
 } catch (_e) {
   console.warn("OpenAI init failed — chat will use demo responses");
@@ -283,7 +284,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // SESSION & PASSPORT SETUP
   const MemStore = MemoryStore(session);
   app.use(session({
-    secret: process.env.SESSION_SECRET || "echome-secret-2026",
+    secret: process.env.APP_SESSION_SECRET || process.env.SESSION_SECRET || "echome-secret-2026",
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 },
@@ -906,7 +907,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/speak", async (req, res) => {
     const { text, voiceId } = req.body as { text: string; voiceId?: string };
-    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const apiKey = process.env.ELEVENLABS_KEY || process.env.ELEVENLABS_API_KEY;
     const defaultVoiceId = process.env.ELEVENLABS_VOICE_ID || "pNInz6obpgDQGcFmaJgB"; // Adam (default)
 
     if (!apiKey) {
@@ -956,7 +957,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // List available ElevenLabs voices (for cloned voice selection)
   app.get("/api/voices", async (_req, res) => {
-    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const apiKey = process.env.ELEVENLABS_KEY || process.env.ELEVENLABS_API_KEY;
     if (!apiKey) return res.json({ voices: [] });
 
     try {
