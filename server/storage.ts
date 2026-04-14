@@ -209,6 +209,7 @@ export interface IStorage {
 
   // Memories
   getMemories(personaId: number): Promise<Memory[]>;
+  getMemoryById(id: number): Promise<Memory | undefined>;
   createMemory(data: InsertMemory): Promise<Memory>;
   updateMemory(id: number, data: Partial<InsertMemory>): Promise<Memory | undefined>;
   deleteMemory(id: number): Promise<void>;
@@ -324,6 +325,9 @@ export class PgStorage implements IStorage {
   // ── Memories ─────────────────────────────────────────────────────────────
   async getMemories(personaId: number): Promise<Memory[]> {
     return db.select().from(schema.memories).where(eq(schema.memories.personaId, personaId)).orderBy(desc(schema.memories.createdAt));
+  }
+  async getMemoryById(id: number): Promise<Memory | undefined> {
+    return db.select().from(schema.memories).where(eq(schema.memories.id, id)).then(r => r[0]);
   }
   async createMemory(data: InsertMemory): Promise<Memory> {
     const [m] = await db.insert(schema.memories).values(data).returning();

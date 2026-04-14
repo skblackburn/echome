@@ -18,6 +18,7 @@ import ContributorSettings from "@/pages/ContributorSettings";
 import Milestones from "@/pages/Milestones";
 import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
+import DocumentLibrary from "@/pages/DocumentLibrary";
 import UploadGuidance from "@/pages/UploadGuidance";
 import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route path="/persona/:id/milestones">{() => <ProtectedRoute component={Milestones} />}</Route>
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
+        <Route path="/persona/:id/documents">{() => <ProtectedRoute component={DocumentLibrary} />}</Route>
         <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
         <Route path="/reactivate">{() => <ProtectedRoute component={Reactivate} allowCancelled />}</Route>
 

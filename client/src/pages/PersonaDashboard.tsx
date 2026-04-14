@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   MessageCircle, BookOpen, Mic, Brain, ChevronRight,
-  Gift, Users, ScrollText, Sparkles, Heart, Pencil
+  Gift, Users, ScrollText, Sparkles, Heart, Pencil, FileText
 } from "lucide-react";
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -294,6 +294,21 @@ export default function PersonaDashboard() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground">Conversation Journal</div>
                 <div className="text-xs text-muted-foreground">Archive of every conversation</div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            </div>
+          </Link>
+
+          <Link href={`/persona/${personaId}/documents`}>
+            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-sky-400/40 hover:bg-sky-50/50 dark:hover:bg-sky-950/10 transition-all cursor-pointer group paper-surface">
+              <div className="p-2 rounded-lg bg-muted group-hover:bg-sky-100 dark:group-hover:bg-sky-900/30 transition-colors flex-shrink-0">
+                <FileText className="h-4 w-4 text-muted-foreground group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-foreground">Manage Documents</div>
+                <div className="text-xs text-muted-foreground">
+                  {docCount > 0 ? `${docCount} uploaded document${docCount !== 1 ? "s" : ""}` : "View and edit uploaded writing"}
+                </div>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             </div>

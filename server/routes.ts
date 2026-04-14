@@ -970,6 +970,88 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // DOCUMENT MANAGEMENT ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // List all documents for a persona (type="document" memories)
+  app.get("/api/personas/:id/documents", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const memories = await storage.getMemories(personaId);
+    const documents = memories
+      .filter(m => m.type === "document")
+      .map(m => ({
+        id: m.id,
+        title: m.title,
+        content: m.content,
+        contentPreview: m.content.slice(0, 150),
+        createdAt: m.createdAt,
+      }));
+    res.json(documents);
+  });
+
+  // Update a specific document's content
+  app.put("/api/personas/:id/documents/:memoryId", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const memoryId = parseInt(req.params.memoryId);
+
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const memory = await storage.getMemoryById(memoryId);
+    if (!memory) return res.status(404).json({ error: "Document not found" });
+    if (memory.personaId !== personaId || memory.type !== "document") {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    const { content, title } = req.body;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+
+    const updated = await storage.updateMemory(memoryId, {
+      content: content.trim(),
+      ...(title !== undefined ? { title } : {}),
+    });
+
+    // Re-trigger writing style analysis (fire-and-forget)
+    analyzeWritingStyle(personaId).catch(e =>
+      console.error(`Async writing style re-analysis failed for persona ${personaId}:`, e)
+    );
+
+    res.json(updated);
+  });
+
+  // Delete a specific document
+  app.delete("/api/personas/:id/documents/:memoryId", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const memoryId = parseInt(req.params.memoryId);
+
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const memory = await storage.getMemoryById(memoryId);
+    if (!memory) return res.status(404).json({ error: "Document not found" });
+    if (memory.personaId !== personaId || memory.type !== "document") {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    await storage.deleteMemory(memoryId);
+
+    // Re-trigger writing style analysis (fire-and-forget)
+    analyzeWritingStyle(personaId).catch(e =>
+      console.error(`Async writing style re-analysis failed for persona ${personaId}:`, e)
+    );
+
+    res.json({ success: true });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // WRITING STYLE ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
