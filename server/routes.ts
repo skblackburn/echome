@@ -799,10 +799,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(persona);
   });
 
-  app.delete("/api/personas/:id", async (req, res) => {
+  app.delete("/api/personas/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
-    await storage.deletePersona(id);
-    res.json({ success: true });
+    const persona = await storage.getPersona(id);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    try {
+      console.log(`[ECHO_DELETE] User ${req.user!.id} deleting persona ${id} (${persona.name}) at ${new Date().toISOString()}`);
+      await storage.deleteAllPersonaData(id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error(`Echo delete failed for persona ${id}:`, err);
+      res.status(500).json({ error: "Failed to delete Echo" });
+    }
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

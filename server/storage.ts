@@ -249,6 +249,9 @@ export interface IStorage {
   getWritingStyle(personaId: number): Promise<WritingStyle | undefined>;
   upsertWritingStyle(personaId: number, data: Partial<InsertWritingStyle>): Promise<WritingStyle>;
 
+  // Persona management
+  deleteAllPersonaData(personaId: number): Promise<void>;
+
   // Account management
   updateUserStatus(userId: number, status: string): Promise<User | undefined>;
   deleteAllUserData(userId: number): Promise<void>;
@@ -450,6 +453,19 @@ export class PgStorage implements IStorage {
       const [ws] = await db.insert(schema.writingStyles).values({ ...data, personaId, updatedAt: new Date() } as InsertWritingStyle).returning();
       return ws;
     }
+  }
+
+  // ── Persona Data Purge ────────────────────────────────────────────────────
+  async deleteAllPersonaData(personaId: number): Promise<void> {
+    await db.delete(schema.chatMessages).where(eq(schema.chatMessages.personaId, personaId));
+    await db.delete(schema.memories).where(eq(schema.memories.personaId, personaId));
+    await db.delete(schema.media).where(eq(schema.media.personaId, personaId));
+    await db.delete(schema.traits).where(eq(schema.traits.personaId, personaId));
+    await db.delete(schema.lifeStory).where(eq(schema.lifeStory.personaId, personaId));
+    await db.delete(schema.milestoneMessages).where(eq(schema.milestoneMessages.personaId, personaId));
+    await db.delete(schema.familyMembers).where(eq(schema.familyMembers.personaId, personaId));
+    await db.delete(schema.writingStyles).where(eq(schema.writingStyles.personaId, personaId));
+    await db.delete(schema.personas).where(eq(schema.personas.id, personaId));
   }
 
   // ── Account Management ───────────────────────────────────────────────────

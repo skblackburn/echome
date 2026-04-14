@@ -1,16 +1,29 @@
-import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useParams, Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   MessageCircle, BookOpen, Mic, Brain, ChevronRight,
-  Gift, Users, ScrollText, Sparkles, Heart, Pencil, FileText
+  Gift, Users, ScrollText, Sparkles, Heart, Pencil, FileText,
+  AlertTriangle, Trash2
 } from "lucide-react";
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -79,6 +92,30 @@ function AnniversaryBanner({ persona }: { persona: Persona }) {
 export default function PersonaDashboard() {
   const { id } = useParams<{ id: string }>();
   const personaId = parseInt(id);
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Delete echo state
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteEcho = async () => {
+    setDeleting(true);
+    try {
+      await apiRequest("DELETE", `/api/personas/${personaId}`);
+      toast({ title: "Echo deleted", description: "The Echo and all its data have been permanently deleted." });
+      setDeleteStep(0);
+      setDeleteConfirmText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
+      navigate("/");
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to delete Echo.", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const { data, isLoading } = useQuery<PersonaSummary>({
     queryKey: ["/api/personas", personaId, "summary"],
@@ -334,6 +371,93 @@ export default function PersonaDashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* ── Danger Zone ──────────────────────────────────────────────── */}
+        <div className="mt-6">
+          <div className="border border-destructive/30 rounded-xl bg-destructive/5 p-6">
+            <h2 className="font-display text-lg font-semibold text-destructive mb-1">Danger Zone</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              This action is permanent and cannot be undone.
+            </p>
+            <div className="rounded-lg border border-destructive/30 bg-card p-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-9 w-9 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="h-5 w-5 text-destructive" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-foreground">Delete this Echo</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Permanently delete {persona.name} and all associated data including documents, conversations, writing style profiles, and memories. This cannot be undone.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => setDeleteStep(1)}
+                  >
+                    Delete Echo
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Delete Echo — Step 1: Warning */}
+        <Dialog open={deleteStep === 1} onOpenChange={(open) => { if (!open) setDeleteStep(0); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Delete this Echo?
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete {persona.name}? All uploaded documents, conversations, and writing style data for this Echo will be permanently deleted. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setDeleteStep(0)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => setDeleteStep(2)}>
+                I understand, continue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Echo — Step 2: Type name to confirm */}
+        <Dialog open={deleteStep === 2} onOpenChange={(open) => { if (!open) { setDeleteStep(0); setDeleteConfirmText(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Confirm permanent deletion</DialogTitle>
+              <DialogDescription>
+                Type <span className="font-mono font-bold text-foreground">{persona.name}</span> below to confirm you want to permanently delete this Echo and all its data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2">
+              <Input
+                placeholder={`Type "${persona.name}" to confirm`}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="font-mono"
+                autoFocus
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => { setDeleteStep(0); setDeleteConfirmText(""); }} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleteConfirmText !== persona.name || deleting}
+                onClick={handleDeleteEcho}
+              >
+                {deleting ? "Deleting..." : "Delete Echo"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
