@@ -18,6 +18,8 @@ import ContributorSettings from "@/pages/ContributorSettings";
 import Milestones from "@/pages/Milestones";
 import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
+import Pricing from "@/pages/Pricing";
+import Account from "@/pages/Account";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import NotFound from "@/pages/not-found";
@@ -50,6 +52,7 @@ function AppRoutes() {
         {/* Public routes */}
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
+        <Route path="/pricing" component={Pricing} />
         <Route path="/join" component={JoinEcho} />
         <Route path="/persona/:id/chat" component={Chat} />
         <Route path="/persona/:id/contribute" component={Contribute} />
@@ -66,6 +69,7 @@ function AppRoutes() {
         <Route path="/persona/:id/milestones">{() => <ProtectedRoute component={Milestones} />}</Route>
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
+        <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
 
         <Route component={NotFound} />
       </Switch>

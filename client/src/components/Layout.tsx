@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { EchoMeWordmark } from "./EchoMeLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon, LogOut, User } from "lucide-react";
+import { ArrowLeft, Sun, Moon, LogOut, User, CreditCard, Settings } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
@@ -64,6 +64,18 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
             </Button>
             {user && (
               <div className="flex items-center gap-1">
+                <Link href="/pricing">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    title="Pricing">
+                    <CreditCard className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+                <Link href="/account">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    title="Account settings">
+                    <Settings className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
                 <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-muted-foreground">
                   <User className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline max-w-[100px] truncate">{user.name}</span>

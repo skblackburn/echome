@@ -591,8 +591,17 @@ export default function CreatePersona() {
       });
       navigate(`/persona/${persona.id}/memories`);
     },
-    onError: (e) => {
-      toast({ title: "Something went wrong", description: String(e), variant: "destructive" });
+    onError: (e: Error) => {
+      if (e.message.includes("403") || e.message.includes("ECHO_LIMIT")) {
+        toast({
+          title: "Echo limit reached",
+          description: "You've reached your Echo limit on your current plan. Upgrade to create more.",
+          variant: "destructive",
+        });
+        navigate("/pricing");
+      } else {
+        toast({ title: "Something went wrong", description: String(e), variant: "destructive" });
+      }
     },
   });
 

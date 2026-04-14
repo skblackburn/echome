@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
+import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -11,6 +12,7 @@ import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
+import Stripe from "stripe";
 import { storage } from "./storage";
 import {
   insertPersonaSchema,
@@ -20,6 +22,31 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import type { User } from "@shared/schema";
+
+// ── Stripe Setup ──────────────────────────────────────────────────────────────
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const APP_URL = process.env.APP_URL || "https://echome-production-a33e.up.railway.app";
+
+// Plan limits configuration
+const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null }> = {
+  free: { echoes: 1, messages: 20 },
+  personal: { echoes: 1, messages: null },
+  family: { echoes: 5, messages: null },
+  legacy: { echoes: 10, messages: null },
+};
+
+// Map Stripe price IDs to plan info
+const PRICE_TO_PLAN: Record<string, { plan: string; interval: string }> = {
+  "price_1TMBkv8vT1Bw3iGUdGojRSkO": { plan: "personal", interval: "month" },
+  "price_1TMBkw8vT1Bw3iGUqB6rTbmp": { plan: "personal", interval: "year" },
+  "price_1TMBkw8vT1Bw3iGUmtP8rs4J": { plan: "family", interval: "month" },
+  "price_1TMBkx8vT1Bw3iGUpWldtaK1": { plan: "family", interval: "year" },
+  "price_1TMBkx8vT1Bw3iGUrocyUuqD": { plan: "legacy", interval: "month" },
+  "price_1TMBky8vT1Bw3iGU4SvvuG58": { plan: "legacy", interval: "year" },
+};
 
 // Extend Express session
 declare module "express-session" {
@@ -279,6 +306,128 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   res.status(401).json({ error: "Not authenticated" });
 }
 
+// ── Stripe Webhook (must be registered before JSON body parser) ──────────────
+export function registerStripeWebhook(app: Express) {
+  app.post("/api/stripe-webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+
+    const sig = req.headers["stripe-signature"] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    let event: Stripe.Event;
+    try {
+      if (webhookSecret && sig) {
+        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } else {
+        // In development without webhook secret, parse raw body directly
+        event = JSON.parse(req.body.toString()) as Stripe.Event;
+      }
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return res.status(400).json({ error: "Webhook signature verification failed" });
+    }
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const sessionObj = event.data.object as any;
+          const customerId = String(sessionObj.customer);
+          const subscriptionId = String(sessionObj.subscription);
+
+          if (!subscriptionId || subscriptionId === "null") break;
+
+          const sub = await stripe.subscriptions.retrieve(subscriptionId) as any;
+          const priceId = sub.items?.data?.[0]?.price?.id;
+          const planInfo = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+          if (planInfo) {
+            const user = await storage.getUserByStripeCustomerId(customerId);
+            if (user) {
+              await storage.updateUserSubscription(user.id, {
+                stripeSubscriptionId: subscriptionId,
+                plan: planInfo.plan,
+                planInterval: planInfo.interval,
+                planExpiresAt: new Date(sub.current_period_end * 1000),
+              });
+              console.log(`Activated ${planInfo.plan} plan for user ${user.id}`);
+            }
+          }
+          break;
+        }
+
+        case "invoice.paid": {
+          const invoice = event.data.object as any;
+          const customerId = String(invoice.customer);
+          const subscriptionId = invoice.subscription ? String(invoice.subscription) : null;
+
+          if (!subscriptionId) break;
+
+          const sub = await stripe.subscriptions.retrieve(subscriptionId) as any;
+          const priceId = sub.items?.data?.[0]?.price?.id;
+          const planInfo = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+          if (planInfo) {
+            const user = await storage.getUserByStripeCustomerId(customerId);
+            if (user) {
+              await storage.updateUserSubscription(user.id, {
+                plan: planInfo.plan,
+                planInterval: planInfo.interval,
+                planExpiresAt: new Date(sub.current_period_end * 1000),
+              });
+            }
+          }
+          break;
+        }
+
+        case "invoice.payment_failed": {
+          const invoice = event.data.object as any;
+          console.warn(`Payment failed for customer ${invoice.customer}`);
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const sub = event.data.object as any;
+          const customerId = String(sub.customer);
+          const user = await storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            await storage.updateUserSubscription(user.id, {
+              stripeSubscriptionId: null,
+              plan: "free",
+              planInterval: null,
+              planExpiresAt: null,
+            });
+            console.log(`Downgraded user ${user.id} to free`);
+          }
+          break;
+        }
+
+        case "customer.subscription.updated": {
+          const sub = event.data.object as any;
+          const customerId = String(sub.customer);
+          const priceId = sub.items?.data?.[0]?.price?.id;
+          const planInfo = priceId ? PRICE_TO_PLAN[priceId] : null;
+
+          if (planInfo) {
+            const user = await storage.getUserByStripeCustomerId(customerId);
+            if (user) {
+              await storage.updateUserSubscription(user.id, {
+                plan: sub.cancel_at_period_end ? user.plan : planInfo.plan,
+                planInterval: planInfo.interval,
+                planExpiresAt: new Date(sub.current_period_end * 1000),
+              });
+            }
+          }
+          break;
+        }
+      }
+    } catch (err) {
+      console.error("Webhook handler error:", err);
+    }
+
+    res.json({ received: true });
+  });
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
 
   // SESSION & PASSPORT SETUP
@@ -347,6 +496,122 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ id: req.user!.id, email: req.user!.email, name: req.user!.name });
   });
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STRIPE / SUBSCRIPTION ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  app.post("/api/create-checkout-session", requireAuth, async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+
+    const { priceId } = req.body;
+    if (!priceId) return res.status(400).json({ error: "priceId is required" });
+
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    try {
+      // Create or retrieve Stripe customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.name,
+          metadata: { userId: String(user.id) },
+        });
+        customerId = customer.id;
+        await storage.updateUserSubscription(user.id, { stripeCustomerId: customerId });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: "subscription",
+        allow_promotion_codes: true,
+        success_url: `${APP_URL}/#/account?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${APP_URL}/#/pricing`,
+      });
+
+      res.json({ url: session.url });
+    } catch (err) {
+      console.error("Checkout session error:", err);
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.get("/api/subscription", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    let cancelAtPeriodEnd = false;
+    if (stripe && user.stripeSubscriptionId) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId) as any;
+        cancelAtPeriodEnd = !!sub.cancel_at_period_end;
+      } catch (_) {}
+    }
+
+    res.json({
+      plan: user.plan || "free",
+      planInterval: user.planInterval,
+      planExpiresAt: user.planExpiresAt,
+      totalMessagesSent: user.totalMessagesSent ?? 0,
+      stripeCustomerId: user.stripeCustomerId,
+      stripeSubscriptionId: user.stripeSubscriptionId,
+      cancelAtPeriodEnd,
+      limits: PLAN_LIMITS[user.plan || "free"],
+    });
+  });
+
+  app.post("/api/cancel-subscription", requireAuth, async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+
+    const user = await storage.getUserById(req.user!.id);
+    if (!user?.stripeSubscriptionId) return res.status(400).json({ error: "No active subscription" });
+
+    try {
+      await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+      res.json({ success: true, message: "Subscription will cancel at period end" });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.post("/api/resume-subscription", requireAuth, async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+
+    const user = await storage.getUserById(req.user!.id);
+    if (!user?.stripeSubscriptionId) return res.status(400).json({ error: "No active subscription" });
+
+    try {
+      await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: false,
+      });
+      res.json({ success: true, message: "Subscription resumed" });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.post("/api/create-portal-session", requireAuth, async (req, res) => {
+    if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
+
+    const user = await storage.getUserById(req.user!.id);
+    if (!user?.stripeCustomerId) return res.status(400).json({ error: "No Stripe customer" });
+
+    try {
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${APP_URL}/#/account`,
+      });
+      res.json({ url: portalSession.url });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   // ── Serve uploaded files ────────────────────────────────────────────────────
   app.use("/uploads", async (req, res, next) => {
     const filePath = path.join(uploadDir, path.basename(req.path));
@@ -380,6 +645,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/personas", upload.single("photo"), async (req, res) => {
     try {
+      // Tier enforcement: check echo count vs plan limit
+      if (req.isAuthenticated()) {
+        const user = await storage.getUserById(req.user!.id);
+        if (user) {
+          const plan = user.plan || "free";
+          const limits = PLAN_LIMITS[plan];
+          const existingPersonas = await storage.getPersonasByUser(user.id);
+          if (existingPersonas.length >= limits.echoes) {
+            return res.status(403).json({
+              error: `You've reached your Echo limit (${limits.echoes}) on the ${plan} plan. Upgrade to create more.`,
+              code: "ECHO_LIMIT",
+              currentCount: existingPersonas.length,
+              limit: limits.echoes,
+              plan,
+            });
+          }
+        }
+      }
+
       const body = req.body;
       const data = insertPersonaSchema.parse({
         name: body.name,
@@ -640,6 +924,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "Message is required" });
     }
 
+    // Tier enforcement: check message limit for free tier users
+    if (req.isAuthenticated()) {
+      const user = await storage.getUserById(req.user!.id);
+      if (user) {
+        const plan = user.plan || "free";
+        const limits = PLAN_LIMITS[plan];
+        if (limits.messages !== null && (user.totalMessagesSent ?? 0) >= limits.messages) {
+          return res.status(403).json({
+            error: `You've used all ${limits.messages} free messages. Upgrade for unlimited messaging.`,
+            code: "MESSAGE_LIMIT",
+            currentCount: user.totalMessagesSent ?? 0,
+            limit: limits.messages,
+            plan,
+          });
+        }
+      }
+    }
+
     // Determine chat history key — family members get their own thread
     const chatPersonaId = personaId; // future: could use viewerCode-specific thread
 
@@ -727,6 +1029,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       role: "assistant",
       content: reply,
     });
+
+    // Increment message count for tier tracking
+    if (req.isAuthenticated()) {
+      await storage.incrementMessageCount(req.user!.id);
+    }
 
     res.json({ message: assistantMsg });
   });

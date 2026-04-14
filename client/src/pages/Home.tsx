@@ -6,8 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MessageCircle, Heart, BookOpen, Mic, Key } from "lucide-react";
+import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 import type { Persona } from "@shared/schema";
+
+interface SubscriptionInfo {
+  plan: string;
+  limits: { echoes: number; messages: number | null };
+  totalMessagesSent: number;
+}
 
 function PersonaCard({ persona }: { persona: Persona }) {
   const initials = persona.name
@@ -75,11 +84,27 @@ function PersonaCard({ persona }: { persona: Persona }) {
 }
 
 export default function Home() {
+  const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
+  const [isDark, setIsDark] = useState(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
+
   const { data: personas, isLoading } = useQuery<Persona[]>({
     queryKey: ["/api/personas"],
   });
 
+  const { data: subscription } = useQuery<SubscriptionInfo>({
+    queryKey: ["/api/subscription"],
+    enabled: !!user,
+  });
+
   const hasPersonas = personas && personas.length > 0;
+  const echoLimit = subscription?.limits?.echoes ?? 1;
+  const atEchoLimit = (personas?.length ?? 0) >= echoLimit;
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,12 +112,47 @@ export default function Home() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <EchoMeWordmark className="text-foreground" />
-          <Link href="/create">
-            <Button size="sm" className="gap-1.5" data-testid="button-create-persona">
-              <Plus className="h-4 w-4" />
-              New Persona
+          <div className="flex items-center gap-1">
+            {!atEchoLimit && (
+              <Link href="/create">
+                <Button size="sm" className="gap-1.5" data-testid="button-create-persona">
+                  <Plus className="h-4 w-4" />
+                  New Persona
+                </Button>
+              </Link>
+            )}
+            <Link href="/pricing">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Pricing">
+                <CreditCard className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/account">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Account">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsDark(d => !d)}
+              className="text-muted-foreground hover:text-foreground h-8 w-8"
+              aria-label="Toggle theme"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-          </Link>
+            {user && (
+              <>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-muted-foreground">
+                  <User className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline max-w-[100px] truncate">{user.name}</span>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={async () => { await logout(); navigate("/login"); }} title="Sign out">
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -157,12 +217,26 @@ export default function Home() {
             </div>
 
             <div className="mt-6 pt-6 border-t border-border space-y-2">
-              <Link href="/create">
-                <Button variant="outline" className="gap-2 w-full" data-testid="button-add-another">
-                  <Plus className="h-4 w-4" />
-                  Add another Echo
-                </Button>
-              </Link>
+              {atEchoLimit ? (
+                <div className="p-4 rounded-lg bg-muted/50 text-center space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Crown className="h-4 w-4 text-primary" />
+                    You've reached your Echo limit ({echoLimit}) on the {subscription?.plan || "free"} plan.
+                  </div>
+                  <Link href="/pricing">
+                    <Button size="sm" className="gap-1.5">
+                      Upgrade to create more
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <Link href="/create">
+                  <Button variant="outline" className="gap-2 w-full" data-testid="button-add-another">
+                    <Plus className="h-4 w-4" />
+                    Add another Echo
+                  </Button>
+                </Link>
+              )}
               <Link href="/join">
                 <Button variant="ghost" className="gap-2 w-full text-muted-foreground" data-testid="button-join-echo">
                   <Key className="h-4 w-4" />
