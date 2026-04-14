@@ -11,6 +11,7 @@ import type {
   LifeStory, InsertLifeStory,
   Milestone, InsertMilestone,
   FamilyMember, InsertFamilyMember,
+  WritingStyle, InsertWritingStyle,
   User,
 } from "@shared/schema";
 
@@ -148,6 +149,25 @@ export async function initDb() {
       created_at TIMESTAMP DEFAULT NOW()
     )`;
 
+  await client`
+    CREATE TABLE IF NOT EXISTS writing_styles (
+      id SERIAL PRIMARY KEY,
+      persona_id INTEGER NOT NULL UNIQUE,
+      sentence_structure TEXT,
+      vocabulary_level TEXT,
+      punctuation_habits TEXT,
+      tone_and_emotion TEXT,
+      common_phrases TEXT,
+      formality TEXT,
+      narrative_style TEXT,
+      quirks TEXT,
+      overall_summary TEXT,
+      analyzed_document_count INTEGER DEFAULT 0,
+      last_analyzed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`;
+
   console.log("Database tables ready");
 }
 
@@ -207,6 +227,10 @@ export interface IStorage {
   updateFamilyMemberSettings(accessCode: string, filterSettings: object): Promise<FamilyMember | undefined>;
   touchFamilyMember(accessCode: string): Promise<void>;
   getContributors(personaId: number): Promise<{ code: string; name: string; count: number }[]>;
+
+  // Writing Styles
+  getWritingStyle(personaId: number): Promise<WritingStyle | undefined>;
+  upsertWritingStyle(personaId: number, data: Partial<InsertWritingStyle>): Promise<WritingStyle>;
 }
 
 export class PgStorage implements IStorage {
@@ -375,6 +399,21 @@ export class PgStorage implements IStorage {
       }
     });
     return Object.entries(map).map(([code, v]) => ({ code, name: v.name, count: v.count }));
+  }
+
+  // ── Writing Styles ───────────────────────────────────────────────────────
+  async getWritingStyle(personaId: number): Promise<WritingStyle | undefined> {
+    return db.select().from(schema.writingStyles).where(eq(schema.writingStyles.personaId, personaId)).then(r => r[0]);
+  }
+  async upsertWritingStyle(personaId: number, data: Partial<InsertWritingStyle>): Promise<WritingStyle> {
+    const existing = await this.getWritingStyle(personaId);
+    if (existing) {
+      const [ws] = await db.update(schema.writingStyles).set({ ...data, updatedAt: new Date() }).where(eq(schema.writingStyles.personaId, personaId)).returning();
+      return ws;
+    } else {
+      const [ws] = await db.insert(schema.writingStyles).values({ ...data, personaId, updatedAt: new Date() } as InsertWritingStyle).returning();
+      return ws;
+    }
   }
 }
 
