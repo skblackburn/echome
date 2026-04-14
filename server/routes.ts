@@ -31,11 +31,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const APP_URL = process.env.APP_URL || "https://echome-production-a33e.up.railway.app";
 
 // Plan limits configuration
-const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null }> = {
-  free: { echoes: 1, messages: 20 },
-  personal: { echoes: 1, messages: null },
-  family: { echoes: 5, messages: null },
-  legacy: { echoes: 10, messages: null },
+const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null }> = {
+  free: { echoes: 1, messages: 20, milestones: 1 },
+  personal: { echoes: 1, messages: null, milestones: 5 },
+  family: { echoes: 5, messages: null, milestones: 15 },
+  legacy: { echoes: 10, messages: null, milestones: null },
 };
 
 // Map Stripe price IDs to plan info
@@ -1251,45 +1251,130 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MILESTONE MESSAGES
   // ═══════════════════════════════════════════════════════════════════════════
 
-  app.get("/api/personas/:id/milestones", async (req, res) => {
-    const milestones = await storage.getMilestones(parseInt(req.params.id));
-    res.json(milestones);
-  });
-
-  app.post("/api/personas/:id/milestones", async (req, res) => {
+  // List milestones for a persona
+  app.get("/api/personas/:id/milestones", requireAuth, async (req, res) => {
     const personaId = parseInt(req.params.id);
     const persona = await storage.getPersona(personaId);
     if (!persona) return res.status(404).json({ error: "Persona not found" });
-    const milestone = await storage.createMilestone({ ...req.body, personaId });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    const milestones = await storage.getMilestones(personaId);
+    res.json(milestones);
+  });
+
+  // List all milestones for a user
+  app.get("/api/milestones", requireAuth, async (req, res) => {
+    const milestones = await storage.getMilestonesByUser(req.user!.id);
+    res.json(milestones);
+  });
+
+  // Create a milestone (with tier limit check)
+  app.post("/api/personas/:id/milestones", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    // Tier limit check
+    const user = await storage.getUserById(req.user!.id);
+    if (user) {
+      const plan = user.plan || "free";
+      const limits = PLAN_LIMITS[plan];
+      if (limits.milestones !== null) {
+        const activeCount = await storage.getActiveMilestoneCountByUser(user.id);
+        if (activeCount >= limits.milestones) {
+          return res.status(403).json({
+            error: `You've reached your milestone limit (${limits.milestones}) on the ${plan} plan. Upgrade to create more.`,
+            code: "MILESTONE_LIMIT",
+            currentCount: activeCount,
+            limit: limits.milestones,
+            plan,
+          });
+        }
+      }
+    }
+
+    const { title, occasion, recipientName, recipientEmail, messagePrompt, scheduledDate, scheduledTime, timezone, isRecurring } = req.body;
+    if (!title || !occasion || !recipientName || !scheduledDate) {
+      return res.status(400).json({ error: "Title, occasion, recipient name, and scheduled date are required" });
+    }
+
+    const milestone = await storage.createMilestone({
+      personaId,
+      userId: req.user!.id,
+      title,
+      occasion,
+      recipientName,
+      recipientEmail: recipientEmail || null,
+      messagePrompt: messagePrompt || null,
+      generatedMessage: null,
+      scheduledDate,
+      scheduledTime: scheduledTime || "09:00",
+      timezone: timezone || "America/New_York",
+      isRecurring: isRecurring || false,
+      status: "scheduled",
+      deliveredAt: null,
+    });
     res.status(201).json(milestone);
   });
 
-  app.delete("/api/milestones/:id", async (req, res) => {
-    await storage.deleteMilestone(parseInt(req.params.id));
+  // Update a milestone
+  app.put("/api/personas/:id/milestones/:milestoneId", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const milestoneId = parseInt(req.params.milestoneId);
+
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const milestone = await storage.getMilestone(milestoneId);
+    if (!milestone) return res.status(404).json({ error: "Milestone not found" });
+    if (milestone.personaId !== personaId) return res.status(404).json({ error: "Milestone not found" });
+    if (milestone.status !== "scheduled") return res.status(400).json({ error: "Can only update scheduled milestones" });
+
+    const { title, occasion, recipientName, recipientEmail, messagePrompt, scheduledDate, scheduledTime, timezone, isRecurring } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (title !== undefined) updates.title = title;
+    if (occasion !== undefined) updates.occasion = occasion;
+    if (recipientName !== undefined) updates.recipientName = recipientName;
+    if (recipientEmail !== undefined) updates.recipientEmail = recipientEmail;
+    if (messagePrompt !== undefined) updates.messagePrompt = messagePrompt;
+    if (scheduledDate !== undefined) updates.scheduledDate = scheduledDate;
+    if (scheduledTime !== undefined) updates.scheduledTime = scheduledTime;
+    if (timezone !== undefined) updates.timezone = timezone;
+    if (isRecurring !== undefined) updates.isRecurring = isRecurring;
+
+    const updated = await storage.updateMilestone(milestoneId, updates);
+    res.json(updated);
+  });
+
+  // Delete a milestone
+  app.delete("/api/personas/:id/milestones/:milestoneId", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const milestoneId = parseInt(req.params.milestoneId);
+
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const milestone = await storage.getMilestone(milestoneId);
+    if (!milestone) return res.status(404).json({ error: "Milestone not found" });
+    if (milestone.personaId !== personaId) return res.status(404).json({ error: "Milestone not found" });
+
+    await storage.deleteMilestone(milestoneId);
     res.json({ success: true });
   });
 
-  // Generate/deliver a milestone message
-  app.post("/api/milestones/:id/deliver", async (req, res) => {
-    const milestone = await storage.getMilestone(parseInt(req.params.id));
+  // Preview/generate a milestone message
+  app.post("/api/milestones/:milestoneId/preview", requireAuth, async (req, res) => {
+    const milestoneId = parseInt(req.params.milestoneId);
+    const milestone = await storage.getMilestone(milestoneId);
     if (!milestone) return res.status(404).json({ error: "Milestone not found" });
-
-    // If already delivered, return cached content
-    if (milestone.delivered && milestone.deliveredContent) {
-      return res.json({ content: milestone.deliveredContent, delivered: true });
-    }
-
-    // If prewritten, deliver immediately
-    if (milestone.messageType === "prewritten" && milestone.prewrittenContent) {
-      await storage.updateMilestone(milestone.id, { delivered: true, deliveredContent: milestone.prewrittenContent });
-      return res.json({ content: milestone.prewrittenContent, delivered: true });
-    }
-
-    // AI-generated: build prompt from persona context
-    if (!openai) return res.status(503).json({ error: "OpenAI not configured" });
 
     const persona = await storage.getPersona(milestone.personaId);
     if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (persona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    if (!openai) return res.status(503).json({ error: "OpenAI not configured" });
 
     const traits = await storage.getTraits(milestone.personaId);
     const memories = await storage.getMemories(milestone.personaId);
@@ -1297,28 +1382,135 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const milestoneWritingStyle = await storage.getWritingStyle(milestone.personaId);
     const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, milestoneWritingStyle);
 
+    const occasionLabel = milestone.occasion.charAt(0).toUpperCase() + milestone.occasion.slice(1);
+    const additionalContext = milestone.messagePrompt ? `\n\nAdditional context to include: ${milestone.messagePrompt}` : "";
+
     try {
       const completion = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Write a heartfelt personal message to ${milestone.recipientName} for their ${milestone.occasion}. This message will be delivered on ${milestone.deliveryDate}. Make it feel genuinely personal, drawing on your relationship with ${milestone.recipientName} and what you know about this milestone in their life. Write it as a letter or note, in your own voice.` },
+          { role: "user", content: `Write a heartfelt personal message to ${milestone.recipientName} for their ${occasionLabel}. The message title is "${milestone.title}". This message will be delivered on ${milestone.scheduledDate}. Make it feel genuinely personal, drawing on your relationship with ${milestone.recipientName} and what you know about this moment in their life. Write it as a letter or note, in your own voice.${additionalContext}` },
         ],
         max_tokens: 600,
         temperature: 0.85,
       });
       const content = completion.choices[0]?.message?.content || "I'm thinking of you on this special day.";
-      await storage.updateMilestone(milestone.id, { delivered: true, deliveredContent: content });
-      res.json({ content, delivered: true });
+      await storage.updateMilestone(milestone.id, { generatedMessage: content });
+      res.json({ generatedMessage: content });
     } catch (e) {
       res.status(500).json({ error: String(e) });
     }
   });
 
-  // Check all due milestones (called on app load)
-  app.get("/api/milestones/due", async (req, res) => {
-    const due = await storage.getDueMilestones();
-    res.json(due);
+  // Process/deliver due milestones
+  app.post("/api/milestones/deliver-due", async (req, res) => {
+    const dueMilestones = await storage.getDueMilestones();
+    const results: { id: number; status: string; error?: string }[] = [];
+
+    for (const milestone of dueMilestones) {
+      try {
+        const persona = await storage.getPersona(milestone.personaId);
+        if (!persona) {
+          await storage.updateMilestone(milestone.id, { status: "failed" });
+          results.push({ id: milestone.id, status: "failed", error: "Persona not found" });
+          continue;
+        }
+
+        // Generate message if not already generated
+        let messageContent = milestone.generatedMessage;
+        if (!messageContent && openai) {
+          const traits = await storage.getTraits(milestone.personaId);
+          const memories = await storage.getMemories(milestone.personaId);
+          const lifeStory = await storage.getLifeStory(milestone.personaId);
+          const ws = await storage.getWritingStyle(milestone.personaId);
+          const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, ws);
+
+          const occasionLabel = milestone.occasion.charAt(0).toUpperCase() + milestone.occasion.slice(1);
+          const additionalContext = milestone.messagePrompt ? `\n\nAdditional context: ${milestone.messagePrompt}` : "";
+
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: `Write a heartfelt personal message to ${milestone.recipientName} for their ${occasionLabel}. The title is "${milestone.title}". Delivered on ${milestone.scheduledDate}. Write it as a letter in your own voice.${additionalContext}` },
+            ],
+            max_tokens: 600,
+            temperature: 0.85,
+          });
+          messageContent = completion.choices[0]?.message?.content || "I'm thinking of you on this special day.";
+        }
+
+        if (!messageContent) {
+          messageContent = "I'm thinking of you on this special day, and I want you to know how much you mean to me.";
+        }
+
+        // Log email (stub — actual email integration later)
+        console.log(`[MILESTONE_EMAIL] To: ${milestone.recipientEmail || "(no email)"}, From: ${persona.name}, Subject: "A message from ${persona.name}", Body preview: ${messageContent.slice(0, 100)}...`);
+
+        // Save to conversation history
+        await storage.addChatMessage({
+          personaId: milestone.personaId,
+          role: "assistant",
+          content: `[Milestone Message — ${milestone.title} for ${milestone.recipientName}]\n\n${messageContent}`,
+        });
+
+        // Update milestone status
+        await storage.updateMilestone(milestone.id, {
+          status: "delivered",
+          generatedMessage: messageContent,
+          deliveredAt: new Date(),
+        });
+
+        // If recurring, create next year's milestone
+        if (milestone.isRecurring) {
+          const nextDate = new Date(milestone.scheduledDate + "T12:00:00");
+          nextDate.setFullYear(nextDate.getFullYear() + 1);
+          const nextDateStr = nextDate.toISOString().split("T")[0];
+          await storage.createMilestone({
+            personaId: milestone.personaId,
+            userId: milestone.userId,
+            title: milestone.title,
+            occasion: milestone.occasion,
+            recipientName: milestone.recipientName,
+            recipientEmail: milestone.recipientEmail,
+            messagePrompt: milestone.messagePrompt,
+            generatedMessage: null,
+            scheduledDate: nextDateStr,
+            scheduledTime: milestone.scheduledTime,
+            timezone: milestone.timezone,
+            isRecurring: true,
+            status: "scheduled",
+            deliveredAt: null,
+          });
+        }
+
+        results.push({ id: milestone.id, status: "delivered" });
+      } catch (e) {
+        console.error(`Milestone delivery failed for ${milestone.id}:`, e);
+        await storage.updateMilestone(milestone.id, { status: "failed" });
+        results.push({ id: milestone.id, status: "failed", error: String(e) });
+      }
+    }
+
+    res.json({ processed: results.length, results });
+  });
+
+  // Get milestone tier info for user
+  app.get("/api/milestones/limits", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const plan = user.plan || "free";
+    const limits = PLAN_LIMITS[plan];
+    const activeCount = await storage.getActiveMilestoneCountByUser(user.id);
+
+    res.json({
+      plan,
+      limit: limits.milestones,
+      active: activeCount,
+      remaining: limits.milestones === null ? null : Math.max(0, limits.milestones - activeCount),
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

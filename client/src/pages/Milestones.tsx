@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Gift, Sparkles, PenLine, Calendar, Clock, CheckCircle2, ChevronRight } from "lucide-react";
+import {
+  Plus, Gift, Calendar, Clock, Cake, Heart, GraduationCap,
+  Star, Flower2, ChevronRight, ArrowUpRight, Lock
+} from "lucide-react";
 import type { Persona } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -18,37 +19,64 @@ const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 interface Milestone {
   id: number;
   personaId: number;
-  recipientName: string;
+  userId: number | null;
+  title: string;
   occasion: string;
-  deliveryDate: string;
-  messageType: string;
-  prewrittenContent?: string;
-  delivered: boolean;
-  deliveredContent?: string;
+  recipientName: string;
+  recipientEmail: string | null;
+  messagePrompt: string | null;
+  generatedMessage: string | null;
+  scheduledDate: string;
+  scheduledTime: string;
+  timezone: string | null;
+  isRecurring: boolean | null;
+  status: string;
+  deliveredAt: string | null;
+  createdAt: string;
 }
 
-const OCCASION_SUGGESTIONS = [
-  "18th birthday", "21st birthday", "Wedding day", "First child",
-  "High school graduation", "College graduation", "Retirement",
-  "30th birthday", "40th birthday", "50th birthday",
-  "First day of a new job", "Moving into first home",
-];
+interface MilestoneLimits {
+  plan: string;
+  limit: number | null;
+  active: number;
+  remaining: number | null;
+}
+
+const OCCASION_ICONS: Record<string, React.ElementType> = {
+  birthday: Cake,
+  anniversary: Heart,
+  graduation: GraduationCap,
+  holiday: Star,
+  memorial: Flower2,
+  other: Gift,
+};
+
+function getOccasionIcon(occasion: string) {
+  const Icon = OCCASION_ICONS[occasion] || Gift;
+  return Icon;
+}
+
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "scheduled":
+      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-0">Scheduled</Badge>;
+    case "generating":
+      return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0">Generating</Badge>;
+    case "delivered":
+      return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">Delivered</Badge>;
+    case "failed":
+      return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0">Failed</Badge>;
+    default:
+      return <Badge variant="outline">{status}</Badge>;
+  }
+}
 
 export default function Milestones() {
   const { id } = useParams<{ id: string }>();
   const personaId = parseInt(id);
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const [showForm, setShowForm] = useState(false);
-  const [recipientName, setRecipientName] = useState("");
-  const [occasion, setOccasion] = useState("");
-  const [deliveryDate, setDeliveryDate] = useState("");
-  const [messageType, setMessageType] = useState<"ai" | "prewritten">("ai");
-  const [prewrittenContent, setPrewrittenContent] = useState("");
-  const [revealedId, setRevealedId] = useState<number | null>(null);
-  const [revealedContent, setRevealedContent] = useState<string | null>(null);
-  const [revealing, setRevealing] = useState(false);
 
   const { data: persona } = useQuery<Persona>({
     queryKey: ["/api/personas", personaId],
@@ -58,61 +86,35 @@ export default function Milestones() {
     },
   });
 
-  const { data: milestones = [] } = useQuery<Milestone[]>({
+  const { data: milestones = [], isLoading } = useQuery<Milestone[]>({
     queryKey: ["/api/personas", personaId, "milestones"],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/personas/${personaId}/milestones`);
-      return res.json();
-    },
   });
 
-  const addMutation = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/personas/${personaId}/milestones`, {
-      recipientName, occasion, deliveryDate, messageType,
-      prewrittenContent: messageType === "prewritten" ? prewrittenContent : null,
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "milestones"] });
-      setShowForm(false);
-      setRecipientName(""); setOccasion(""); setDeliveryDate("");
-      setMessageType("ai"); setPrewrittenContent("");
-      toast({ title: "Milestone saved", description: "It will be waiting when the day arrives." });
-    },
-    onError: () => toast({ title: "Couldn't save milestone", variant: "destructive" }),
+  const { data: limits } = useQuery<MilestoneLimits>({
+    queryKey: ["/api/milestones/limits"],
   });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/milestones/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "milestones"] }),
-  });
-
-  const revealMilestone = async (milestone: Milestone) => {
-    if (revealedId === milestone.id) {
-      setRevealedId(null); setRevealedContent(null); return;
-    }
-    setRevealing(true);
-    setRevealedId(milestone.id);
-    try {
-      const res = await apiRequest("POST", `/api/milestones/${milestone.id}/deliver`);
-      const data = await res.json() as { content: string };
-      setRevealedContent(data.content);
-    } catch (e) {
-      toast({ title: "Couldn't generate message", variant: "destructive" });
-      setRevealedId(null);
-    } finally {
-      setRevealing(false);
-    }
-  };
 
   const firstName = persona?.name?.split(" ")[0] || "them";
   const today = new Date().toISOString().split("T")[0];
 
-  const upcoming = milestones.filter(m => !m.delivered && m.deliveryDate > today);
-  const due = milestones.filter(m => !m.delivered && m.deliveryDate <= today);
-  const delivered = milestones.filter(m => m.delivered);
+  const scheduled = milestones.filter(m => m.status === "scheduled");
+  const delivered = milestones.filter(m => m.status === "delivered");
+  const failed = milestones.filter(m => m.status === "failed");
 
-  const canSubmit = recipientName.trim() && occasion.trim() && deliveryDate &&
-    (messageType === "ai" || prewrittenContent.trim());
+  const atLimit = limits && limits.limit !== null && limits.active >= limits.limit;
+
+  if (isLoading) {
+    return (
+      <Layout title="Milestone Messages" backTo={`/persona/${personaId}`} backLabel={persona?.name || "Back"}>
+        <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-80" />
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout title="Milestone Messages" backTo={`/persona/${personaId}`} backLabel={persona?.name || "Back"}>
@@ -124,183 +126,151 @@ export default function Milestones() {
             {firstName}'s Milestone Messages
           </h1>
           <p className="text-sm text-muted-foreground">
-            Messages from {firstName} that will be waiting on the most important days of life — birthdays, graduations, weddings, and more.
+            Messages from {firstName} that will be waiting on the most important days — birthdays, graduations, weddings, and more.
           </p>
         </div>
 
-        {/* Due now banner */}
-        {due.length > 0 && (
-          <div className="rounded-2xl border-2 border-amber-400/50 bg-amber-50 dark:bg-amber-950/20 p-5 space-y-3">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-semibold text-sm">
-              <Gift className="h-4 w-4" />
-              {due.length === 1 ? "A message is waiting" : `${due.length} messages are waiting`}
+        {/* Usage bar */}
+        {limits && (
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 paper-surface">
+            <div className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{limits.active}</span>
+              {limits.limit !== null ? (
+                <> of <span className="font-medium text-foreground">{limits.limit}</span> milestones used</>
+              ) : (
+                <> active milestone{limits.active !== 1 ? "s" : ""} <span className="text-xs">(unlimited)</span></>
+              )}
             </div>
-            {due.map(m => (
-              <div key={m.id} className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">For {m.recipientName} — {m.occasion}</div>
-                    <div className="text-xs text-muted-foreground">{m.deliveryDate}</div>
-                  </div>
-                  <Button size="sm" onClick={() => revealMilestone(m)} disabled={revealing && revealedId === m.id}
-                    className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
-                    {revealing && revealedId === m.id ? "Opening…" : "Open message"}
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-                {revealedId === m.id && revealedContent && (
-                  <div className="rounded-xl bg-background/80 border border-amber-300/40 p-4 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                    {revealedContent}
-                  </div>
-                )}
-              </div>
-            ))}
+            <Badge variant="outline" className="capitalize text-xs">{limits.plan} plan</Badge>
           </div>
         )}
 
-        {/* Add button */}
-        {!showForm && (
-          <Button onClick={() => setShowForm(true)} className="gap-2 w-full" variant="outline">
-            <Plus className="h-4 w-4" /> Add a milestone message
+        {/* Create button */}
+        {atLimit ? (
+          <div className="rounded-xl border border-amber-300/50 bg-amber-50 dark:bg-amber-950/20 p-4 flex items-center gap-3">
+            <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <div className="flex-1">
+              <div className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                Milestone limit reached
+              </div>
+              <p className="text-xs text-amber-600/80 dark:text-amber-400/70 mt-0.5">
+                Upgrade your plan to create more milestone messages.
+              </p>
+            </div>
+            <Link href="/pricing">
+              <Button size="sm" variant="outline" className="gap-1.5">
+                Upgrade <ArrowUpRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <Button
+            onClick={() => navigate(`/persona/${personaId}/milestones/new`)}
+            className="gap-2 w-full"
+            variant="outline"
+          >
+            <Plus className="h-4 w-4" /> Create Milestone Message
           </Button>
         )}
 
-        {/* Add form */}
-        {showForm && (
-          <div className="rounded-2xl border border-border bg-card p-6 space-y-5 paper-surface">
-            <h2 className="font-semibold text-foreground text-sm">New milestone message</h2>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>For who? <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g., Eowyn" value={recipientName} onChange={e => setRecipientName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Deliver on <span className="text-destructive">*</span></Label>
-                <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} min={today} />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Occasion <span className="text-destructive">*</span></Label>
-              <Input placeholder="e.g., 18th birthday, wedding day…" value={occasion} onChange={e => setOccasion(e.target.value)} />
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {OCCASION_SUGGESTIONS.slice(0, 6).map(s => (
-                  <button key={s} type="button" onClick={() => setOccasion(s)}
-                    className="text-xs px-2.5 py-1 rounded-full bg-muted hover:bg-secondary border border-border text-muted-foreground hover:text-foreground transition-colors">
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Message type */}
-            <div className="space-y-2">
-              <Label>Message type</Label>
-              <div className="grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => setMessageType("ai")}
-                  className={cn("flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all",
-                    messageType === "ai" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30")}>
-                  <Sparkles className={cn("h-4 w-4 mt-0.5 flex-shrink-0", messageType === "ai" ? "text-primary" : "text-muted-foreground")} />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">AI-generated</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{firstName} writes it on the day, drawing on everything she knows</div>
-                  </div>
-                </button>
-                <button type="button" onClick={() => setMessageType("prewritten")}
-                  className={cn("flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all",
-                    messageType === "prewritten" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30")}>
-                  <PenLine className={cn("h-4 w-4 mt-0.5 flex-shrink-0", messageType === "prewritten" ? "text-primary" : "text-muted-foreground")} />
-                  <div>
-                    <div className="text-xs font-semibold text-foreground">Pre-written</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">Write the exact words now, delivered verbatim on the date</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {messageType === "prewritten" && (
-              <div className="space-y-1.5">
-                <Label>Message <span className="text-destructive">*</span></Label>
-                <Textarea
-                  placeholder={`Write ${firstName}'s message to ${recipientName || "them"} in her own voice…`}
-                  value={prewrittenContent}
-                  onChange={e => setPrewrittenContent(e.target.value)}
-                  rows={5}
-                  className="resize-none"
-                />
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setShowForm(false)} className="flex-1">Cancel</Button>
-              <Button disabled={!canSubmit || addMutation.isPending} onClick={() => addMutation.mutate()} className="flex-1 gap-1.5">
-                <Gift className="h-4 w-4" />
-                {addMutation.isPending ? "Saving…" : "Save milestone"}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Upcoming */}
-        {upcoming.length > 0 && (
+        {/* Scheduled milestones */}
+        {scheduled.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-              <Clock className="h-3.5 w-3.5" /> Upcoming ({upcoming.length})
+              <Clock className="h-3.5 w-3.5" /> Scheduled ({scheduled.length})
             </h2>
-            {upcoming.map(m => (
-              <div key={m.id} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card paper-surface">
-                <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
-                  {m.messageType === "ai" ? <Sparkles className="h-4 w-4 text-primary" /> : <PenLine className="h-4 w-4 text-primary" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">For {m.recipientName} — {m.occasion}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(m.deliveryDate + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                    <Badge variant="outline" className="text-xs ml-1">{m.messageType === "ai" ? "AI will write" : "Pre-written"}</Badge>
+            {scheduled.map(m => {
+              const OccasionIcon = getOccasionIcon(m.occasion);
+              return (
+                <Link key={m.id} href={`/persona/${personaId}/milestones/${m.id}`}>
+                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card paper-surface hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group">
+                    <div className="p-2.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex-shrink-0">
+                      <OccasionIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground">{m.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span>For {m.recipientName}</span>
+                        <span className="text-muted-foreground/50">·</span>
+                        <Calendar className="h-3 w-3" />
+                        {new Date(m.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {m.isRecurring && (
+                          <>
+                            <span className="text-muted-foreground/50">·</span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">Recurring</Badge>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {getStatusBadge(m.status)}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 group-hover:text-primary transition-colors" />
                   </div>
-                </div>
-                <button onClick={() => deleteMutation.mutate(m.id)} className="text-muted-foreground hover:text-destructive transition-colors flex-shrink-0">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
 
-        {/* Delivered */}
+        {/* Delivered milestones */}
         {delivered.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Delivered ({delivered.length})
+              <Gift className="h-3.5 w-3.5" /> Delivered ({delivered.length})
             </h2>
-            {delivered.map(m => (
-              <div key={m.id} className="space-y-2">
-                <button type="button" onClick={() => revealMilestone(m)}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl border border-border bg-card/60 hover:bg-card transition-all text-left group">
-                  <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground">For {m.recipientName} — {m.occasion}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(m.deliveryDate + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            {delivered.map(m => {
+              const OccasionIcon = getOccasionIcon(m.occasion);
+              return (
+                <Link key={m.id} href={`/persona/${personaId}/milestones/${m.id}`}>
+                  <div className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card/60 hover:bg-card transition-all cursor-pointer group">
+                    <div className="p-2.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
+                      <OccasionIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground">{m.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        For {m.recipientName} · {m.deliveredAt
+                          ? new Date(m.deliveredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          : m.scheduledDate}
+                      </div>
+                    </div>
+                    {getStatusBadge(m.status)}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   </div>
-                  <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", revealedId === m.id && "rotate-90")} />
-                </button>
-                {revealedId === m.id && (revealedContent || m.deliveredContent) && (
-                  <div className="rounded-xl bg-muted/40 border border-border p-4 text-sm text-foreground leading-relaxed whitespace-pre-wrap ml-4">
-                    {revealedContent || m.deliveredContent}
-                  </div>
-                )}
-              </div>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
 
-        {milestones.length === 0 && !showForm && (
+        {/* Failed milestones */}
+        {failed.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+              Failed ({failed.length})
+            </h2>
+            {failed.map(m => {
+              const OccasionIcon = getOccasionIcon(m.occasion);
+              return (
+                <Link key={m.id} href={`/persona/${personaId}/milestones/${m.id}`}>
+                  <div className="flex items-center gap-4 p-4 rounded-xl border border-red-200/50 bg-red-50/50 dark:bg-red-950/10 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all cursor-pointer group">
+                    <div className="p-2.5 rounded-lg bg-red-100 dark:bg-red-900/30 flex-shrink-0">
+                      <OccasionIcon className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground">{m.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">For {m.recipientName}</div>
+                    </div>
+                    {getStatusBadge(m.status)}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {milestones.length === 0 && (
           <div className="text-center py-12 space-y-3">
             <Gift className="h-10 w-10 text-muted-foreground/40 mx-auto" />
             <p className="text-sm text-muted-foreground">No milestone messages yet.</p>

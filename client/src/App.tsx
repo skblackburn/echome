@@ -16,6 +16,8 @@ import JoinEcho from "@/pages/JoinEcho";
 import Contribute from "@/pages/Contribute";
 import ContributorSettings from "@/pages/ContributorSettings";
 import Milestones from "@/pages/Milestones";
+import CreateMilestone from "@/pages/CreateMilestone";
+import MilestoneDetail from "@/pages/MilestoneDetail";
 import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
 import DocumentLibrary from "@/pages/DocumentLibrary";
@@ -79,6 +81,8 @@ function AppRoutes() {
         <Route path="/persona/:id/life-story">{() => <ProtectedRoute component={LifeStory} />}</Route>
         <Route path="/persona/:id/edit">{() => <ProtectedRoute component={EditPersona} />}</Route>
         <Route path="/persona/:id/milestones">{() => <ProtectedRoute component={Milestones} />}</Route>
+        <Route path="/persona/:id/milestones/new">{() => <ProtectedRoute component={CreateMilestone} />}</Route>
+        <Route path="/persona/:id/milestones/:milestoneId">{() => <ProtectedRoute component={MilestoneDetail} />}</Route>
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
         <Route path="/persona/:id/documents">{() => <ProtectedRoute component={DocumentLibrary} />}</Route>

@@ -29,7 +29,7 @@ const tiers = [
     annualPriceId: null,
     echoes: "1 Echo",
     messages: "20 messages",
-    features: ["1 Echo persona", "20 total messages", "Memory archive", "Voice recordings"],
+    features: ["1 Echo persona", "20 total messages", "Memory archive", "Voice recordings", "1 milestone message"],
   },
   {
     name: "Personal",
@@ -40,7 +40,7 @@ const tiers = [
     annualPriceId: "price_1TMBkw8vT1Bw3iGUqB6rTbmp",
     echoes: "1 Echo",
     messages: "Unlimited",
-    features: ["1 Echo persona", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis"],
+    features: ["1 Echo persona", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "5 milestone messages"],
   },
   {
     name: "Family",
@@ -52,7 +52,7 @@ const tiers = [
     echoes: "5 Echoes",
     messages: "Unlimited",
     popular: true,
-    features: ["Up to 5 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes"],
+    features: ["Up to 5 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "15 milestone messages"],
   },
   {
     name: "Legacy",
@@ -63,7 +63,7 @@ const tiers = [
     annualPriceId: "price_1TMBky8vT1Bw3iGU4SvvuG58",
     echoes: "10 Echoes",
     messages: "Unlimited",
-    features: ["Up to 10 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "Milestone messages"],
+    features: ["Up to 10 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "Unlimited milestone messages"],
   },
 ];
 

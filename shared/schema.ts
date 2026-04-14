@@ -119,16 +119,23 @@ export type LifeStory = typeof lifeStory.$inferSelect;
 export const milestoneMessages = pgTable("milestone_messages", {
   id: serial("id").primaryKey(),
   personaId: integer("persona_id").notNull(),
-  recipientName: text("recipient_name").notNull(),
+  userId: integer("user_id"),
+  title: text("title").notNull(),
   occasion: text("occasion").notNull(),
-  deliveryDate: text("delivery_date").notNull(),
-  messageType: text("message_type").notNull().default("ai"),
-  prewrittenContent: text("prewritten_content"),
-  delivered: boolean("delivered").default(false),
-  deliveredContent: text("delivered_content"),
+  recipientName: text("recipient_name").notNull(),
+  recipientEmail: text("recipient_email"),
+  messagePrompt: text("message_prompt"),
+  generatedMessage: text("generated_message"),
+  scheduledDate: text("scheduled_date").notNull(),
+  scheduledTime: text("scheduled_time").notNull().default("09:00"),
+  timezone: text("timezone").default("America/New_York"),
+  isRecurring: boolean("is_recurring").default(false),
+  status: text("status").notNull().default("scheduled"),
+  deliveredAt: timestamp("delivered_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
-export const insertMilestoneSchema = createInsertSchema(milestoneMessages).omit({ id: true, createdAt: true });
+export const insertMilestoneSchema = createInsertSchema(milestoneMessages).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMilestone = z.infer<typeof insertMilestoneSchema>;
 export type Milestone = typeof milestoneMessages.$inferSelect;
 
