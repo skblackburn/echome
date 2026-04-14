@@ -60,6 +60,75 @@ try {
   console.warn("OpenAI init failed — chat will use demo responses");
 }
 
+// ── Analyze writing style from persona documents ─────────────────────────────
+async function analyzeWritingStyle(personaId: number): Promise<void> {
+  if (!openai) return;
+
+  const memories = await storage.getMemories(personaId);
+  const documents = memories.filter(m => m.type === "document");
+  if (documents.length === 0) return;
+
+  // Concatenate document text up to ~8000 tokens (~32000 chars)
+  let combinedText = "";
+  for (const doc of documents) {
+    if (combinedText.length >= 32000) break;
+    combinedText += `--- ${doc.title || "Document"} ---\n${doc.content}\n\n`;
+  }
+  combinedText = combinedText.slice(0, 32000);
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a writing style analyst. Analyze the provided text samples and extract a detailed writing style profile. Respond ONLY with valid JSON matching this exact structure (all values are strings):
+{
+  "sentenceStructure": "Description of typical sentence patterns, length, complexity",
+  "vocabularyLevel": "Description of word choices, complexity, jargon usage",
+  "punctuationHabits": "Notable punctuation patterns, em-dashes, ellipses, etc.",
+  "toneAndEmotion": "Emotional tone, warmth, humor, seriousness",
+  "commonPhrases": "Frequently used phrases, expressions, or verbal tics as a JSON array string",
+  "formality": "Level of formality, conversational vs. formal",
+  "narrativeStyle": "How they tell stories, use anecdotes, structure thoughts",
+  "quirks": "Unique writing habits, capitalizations, signature expressions",
+  "overallSummary": "2-3 sentence distillation of how this person writes"
+}
+Do not include any text outside the JSON object.`,
+        },
+        {
+          role: "user",
+          content: `Analyze the writing style of the following text samples:\n\n${combinedText}`,
+        },
+      ],
+      max_tokens: 1000,
+      temperature: 0.3,
+    });
+
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return;
+
+    const profile = JSON.parse(raw);
+
+    await storage.upsertWritingStyle(personaId, {
+      personaId,
+      sentenceStructure: profile.sentenceStructure || null,
+      vocabularyLevel: profile.vocabularyLevel || null,
+      punctuationHabits: profile.punctuationHabits || null,
+      toneAndEmotion: profile.toneAndEmotion || null,
+      commonPhrases: profile.commonPhrases || null,
+      formality: profile.formality || null,
+      narrativeStyle: profile.narrativeStyle || null,
+      quirks: profile.quirks || null,
+      overallSummary: profile.overallSummary || null,
+      analyzedDocumentCount: documents.length,
+      lastAnalyzedAt: new Date(),
+    });
+  } catch (e) {
+    console.error(`Writing style analysis failed for persona ${personaId}:`, e);
+  }
+}
+
 // ── Build AI system prompt from persona data ──────────────────────────────────
 function buildSystemPrompt(
   personaId: number,
@@ -75,6 +144,11 @@ function buildSystemPrompt(
     humor?: string | null; hardTimes?: string | null; hometown?: string | null;
     career?: string | null; proudestMoment?: string | null; hardestPeriod?: string | null;
     wishForFamily?: string | null; whatToRemember?: string | null; unfinshedBusiness?: string | null;
+  } | null,
+  writingStyle?: {
+    sentenceStructure?: string | null; vocabularyLevel?: string | null; punctuationHabits?: string | null;
+    toneAndEmotion?: string | null; commonPhrases?: string | null; formality?: string | null;
+    narrativeStyle?: string | null; quirks?: string | null; overallSummary?: string | null;
   } | null
 ): string {
   const traitsByCategory: Record<string, string[]> = {};
@@ -183,7 +257,7 @@ function buildSystemPrompt(
 
 ${bio ? `ABOUT YOU:\n${bio}\n${birthPlaceText}\n` : birthPlaceText}${creatorContext}${familyText ? `YOUR FAMILY:\n${familyText}\n` : ""}YOUR PERSONALITY AND VALUES:\n${traitText || "Warm, loving, and thoughtful."}
 
-${lifeStoryText}YOUR MEMORIES AND STORIES:\n${memoryText || "You have many cherished memories with your family."}${documentText ? `\n\nDOCUMENTS AND WRITINGS:\nThe following are writings, narratives, or documents that capture who you are. Draw on these richly in conversation:\n\n${documentText}` : ""}
+${lifeStoryText}YOUR MEMORIES AND STORIES:\n${memoryText || "You have many cherished memories with your family."}${documentText ? `\n\nDOCUMENTS AND WRITINGS:\nThe following are writings, narratives, or documents that capture who you are. Draw on these richly in conversation:\n\n${documentText}` : ""}${writingStyle ? `\n\n=== WRITING STYLE ===\nThis is how ${personaName} writes and communicates. Mirror this style closely in your responses:\n\n${writingStyle.sentenceStructure ? `Sentence Structure: ${writingStyle.sentenceStructure}\n` : ""}${writingStyle.vocabularyLevel ? `Vocabulary: ${writingStyle.vocabularyLevel}\n` : ""}${writingStyle.punctuationHabits ? `Punctuation: ${writingStyle.punctuationHabits}\n` : ""}${writingStyle.toneAndEmotion ? `Tone & Emotion: ${writingStyle.toneAndEmotion}\n` : ""}${writingStyle.commonPhrases ? `Common Phrases: ${writingStyle.commonPhrases}\n` : ""}${writingStyle.formality ? `Formality: ${writingStyle.formality}\n` : ""}${writingStyle.narrativeStyle ? `Narrative Style: ${writingStyle.narrativeStyle}\n` : ""}${writingStyle.quirks ? `Quirks: ${writingStyle.quirks}\n` : ""}${writingStyle.overallSummary ? `\nSummary: ${writingStyle.overallSummary}` : ""}` : ""}
 
 GUIDELINES:
 - Respond warmly, personally, and naturally as ${personaName} would.
@@ -504,11 +578,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         tags: null,
       });
 
+      // Trigger writing style analysis asynchronously (fire-and-forget)
+      analyzeWritingStyle(personaId).catch(e =>
+        console.error(`Async writing style analysis failed for persona ${personaId}:`, e)
+      );
+
       res.json(memory);
     } catch (e) {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       res.status(500).json({ error: `Failed to parse document: ${String(e)}` });
     }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WRITING STYLE ROUTES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  app.get("/api/personas/:id/writing-style", async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    const style = await storage.getWritingStyle(personaId);
+    res.json(style || {});
+  });
+
+  app.post("/api/personas/:id/analyze-style", async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+    if (!openai) return res.status(503).json({ error: "OpenAI not configured" });
+
+    const memories = await storage.getMemories(personaId);
+    const documents = memories.filter(m => m.type === "document");
+    if (documents.length === 0) {
+      return res.status(400).json({ error: "No documents found for this persona. Upload documents first." });
+    }
+
+    // Trigger analysis asynchronously
+    analyzeWritingStyle(personaId).catch(e =>
+      console.error(`Manual writing style analysis failed for persona ${personaId}:`, e)
+    );
+
+    res.json({ message: "Writing style analysis started", documentCount: documents.length });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -561,6 +672,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     const chatHistory = await storage.getChatHistory(personaId);
     const lifeStory = await storage.getLifeStory(personaId);
+    const writingStyle = await storage.getWritingStyle(personaId);
 
     // Generate response
     let reply: string;
@@ -574,7 +686,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         traits,
         memories,
         persona,
-        lifeStory
+        lifeStory,
+        writingStyle
       );
 
       // Build messages array (last 20 exchanges for context)
@@ -687,7 +800,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const traits = await storage.getTraits(milestone.personaId);
     const memories = await storage.getMemories(milestone.personaId);
     const lifeStory = await storage.getLifeStory(milestone.personaId);
-    const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory);
+    const milestoneWritingStyle = await storage.getWritingStyle(milestone.personaId);
+    const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, milestoneWritingStyle);
 
     try {
       const completion = await openai.chat.completions.create({

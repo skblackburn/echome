@@ -151,3 +151,25 @@ export const chatMessages = pgTable("chat_messages", {
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// ─── Writing Styles ──────────────────────────────────────────────────────────
+export const writingStyles = pgTable("writing_styles", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id").notNull().unique(),
+  sentenceStructure: text("sentence_structure"),
+  vocabularyLevel: text("vocabulary_level"),
+  punctuationHabits: text("punctuation_habits"),
+  toneAndEmotion: text("tone_and_emotion"),
+  commonPhrases: text("common_phrases"),
+  formality: text("formality"),
+  narrativeStyle: text("narrative_style"),
+  quirks: text("quirks"),
+  overallSummary: text("overall_summary"),
+  analyzedDocumentCount: integer("analyzed_document_count").default(0),
+  lastAnalyzedAt: timestamp("last_analyzed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertWritingStyleSchema = createInsertSchema(writingStyles).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertWritingStyle = z.infer<typeof insertWritingStyleSchema>;
+export type WritingStyle = typeof writingStyles.$inferSelect;
