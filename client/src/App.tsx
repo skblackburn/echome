@@ -20,12 +20,13 @@ import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
 import Pricing from "@/pages/Pricing";
 import Account from "@/pages/Account";
+import Reactivate from "@/pages/Reactivate";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import NotFound from "@/pages/not-found";
 
-// Redirect to login if not authenticated
-function ProtectedRoute({ component: Component }: { component: React.ComponentType<any> }) {
+// Redirect to login if not authenticated, or to reactivate if cancelled
+function ProtectedRoute({ component: Component, allowCancelled }: { component: React.ComponentType<any>; allowCancelled?: boolean }) {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
 
@@ -39,6 +40,12 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 
   if (!user) {
     navigate("/login");
+    return null;
+  }
+
+  // Redirect cancelled users to reactivation page
+  if (user.status === "cancelled" && !allowCancelled) {
+    navigate("/reactivate");
     return null;
   }
 
@@ -70,6 +77,7 @@ function AppRoutes() {
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
         <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
+        <Route path="/reactivate">{() => <ProtectedRoute component={Reactivate} allowCancelled />}</Route>
 
         <Route component={NotFound} />
       </Switch>

@@ -38,6 +38,7 @@ export async function initDb() {
       plan_interval TEXT,
       plan_expires_at TIMESTAMP,
       total_messages_sent INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
 
@@ -48,6 +49,7 @@ export async function initDb() {
   await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_interval TEXT`.catch(() => {});
   await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP`.catch(() => {});
   await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_messages_sent INTEGER NOT NULL DEFAULT 0`.catch(() => {});
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS personas (
@@ -246,6 +248,11 @@ export interface IStorage {
   getWritingStyle(personaId: number): Promise<WritingStyle | undefined>;
   upsertWritingStyle(personaId: number, data: Partial<InsertWritingStyle>): Promise<WritingStyle>;
 
+  // Account management
+  updateUserStatus(userId: number, status: string): Promise<User | undefined>;
+  deleteAllUserData(userId: number): Promise<void>;
+  deleteUser(userId: number): Promise<void>;
+
   // Subscriptions
   updateUserSubscription(userId: number, data: Partial<{
     stripeCustomerId: string | null;
@@ -439,6 +446,35 @@ export class PgStorage implements IStorage {
       const [ws] = await db.insert(schema.writingStyles).values({ ...data, personaId, updatedAt: new Date() } as InsertWritingStyle).returning();
       return ws;
     }
+  }
+
+  // ── Account Management ───────────────────────────────────────────────────
+  async updateUserStatus(userId: number, status: string): Promise<User | undefined> {
+    const [user] = await db.update(schema.users).set({ status }).where(eq(schema.users.id, userId)).returning();
+    return user;
+  }
+
+  async deleteAllUserData(userId: number): Promise<void> {
+    // Get all personas belonging to this user
+    const userPersonas = await this.getPersonasByUser(userId);
+    const personaIds = userPersonas.map(p => p.id);
+
+    // Delete all data associated with each persona
+    for (const pid of personaIds) {
+      await db.delete(schema.chatMessages).where(eq(schema.chatMessages.personaId, pid));
+      await db.delete(schema.memories).where(eq(schema.memories.personaId, pid));
+      await db.delete(schema.media).where(eq(schema.media.personaId, pid));
+      await db.delete(schema.traits).where(eq(schema.traits.personaId, pid));
+      await db.delete(schema.lifeStory).where(eq(schema.lifeStory.personaId, pid));
+      await db.delete(schema.milestoneMessages).where(eq(schema.milestoneMessages.personaId, pid));
+      await db.delete(schema.familyMembers).where(eq(schema.familyMembers.personaId, pid));
+      await db.delete(schema.writingStyles).where(eq(schema.writingStyles.personaId, pid));
+      await db.delete(schema.personas).where(eq(schema.personas.id, pid));
+    }
+  }
+
+  async deleteUser(userId: number): Promise<void> {
+    await db.delete(schema.users).where(eq(schema.users.id, userId));
   }
 
   // ── Subscriptions ────────────────────────────────────────────────────────

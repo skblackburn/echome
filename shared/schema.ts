@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   planInterval: text("plan_interval"),
   planExpiresAt: timestamp("plan_expires_at"),
   totalMessagesSent: integer("total_messages_sent").notNull().default(0),
+  status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
