@@ -1,5 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes, registerStripeWebhook } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initDb } from "./storage";
@@ -12,6 +12,9 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+// Stripe webhook must be registered BEFORE JSON body parser
+registerStripeWebhook(app);
 
 app.use(
   express.json({

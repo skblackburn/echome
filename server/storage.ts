@@ -32,8 +32,22 @@ export async function initDb() {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
+      plan TEXT NOT NULL DEFAULT 'free',
+      plan_interval TEXT,
+      plan_expires_at TIMESTAMP,
+      total_messages_sent INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  // Add subscription columns if they don't exist (for existing databases)
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT`.catch(() => {});
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT`.catch(() => {});
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free'`.catch(() => {});
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_interval TEXT`.catch(() => {});
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMP`.catch(() => {});
+  await client`ALTER TABLE users ADD COLUMN IF NOT EXISTS total_messages_sent INTEGER NOT NULL DEFAULT 0`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS personas (
@@ -231,6 +245,17 @@ export interface IStorage {
   // Writing Styles
   getWritingStyle(personaId: number): Promise<WritingStyle | undefined>;
   upsertWritingStyle(personaId: number, data: Partial<InsertWritingStyle>): Promise<WritingStyle>;
+
+  // Subscriptions
+  updateUserSubscription(userId: number, data: Partial<{
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    plan: string;
+    planInterval: string | null;
+    planExpiresAt: Date | null;
+  }>): Promise<User | undefined>;
+  getUserByStripeCustomerId(customerId: string): Promise<User | undefined>;
+  incrementMessageCount(userId: number): Promise<void>;
 }
 
 export class PgStorage implements IStorage {
@@ -413,6 +438,27 @@ export class PgStorage implements IStorage {
     } else {
       const [ws] = await db.insert(schema.writingStyles).values({ ...data, personaId, updatedAt: new Date() } as InsertWritingStyle).returning();
       return ws;
+    }
+  }
+
+  // ── Subscriptions ────────────────────────────────────────────────────────
+  async updateUserSubscription(userId: number, data: Partial<{
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    plan: string;
+    planInterval: string | null;
+    planExpiresAt: Date | null;
+  }>): Promise<User | undefined> {
+    const [user] = await db.update(schema.users).set(data).where(eq(schema.users.id, userId)).returning();
+    return user;
+  }
+  async getUserByStripeCustomerId(customerId: string): Promise<User | undefined> {
+    return db.select().from(schema.users).where(eq(schema.users.stripeCustomerId, customerId)).then(r => r[0]);
+  }
+  async incrementMessageCount(userId: number): Promise<void> {
+    const user = await this.getUserById(userId);
+    if (user) {
+      await db.update(schema.users).set({ totalMessagesSent: (user.totalMessagesSent ?? 0) + 1 }).where(eq(schema.users.id, userId));
     }
   }
 }

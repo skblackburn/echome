@@ -8,6 +8,12 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  plan: text("plan").notNull().default("free"),
+  planInterval: text("plan_interval"),
+  planExpiresAt: timestamp("plan_expires_at"),
+  totalMessagesSent: integer("total_messages_sent").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });

@@ -151,6 +151,7 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState("");
   const [showStarters, setShowStarters] = useState(false);
+  const [messageLimitHit, setMessageLimitHit] = useState(false);
 
   const { data: persona } = useQuery<Persona>({
     queryKey: ["/api/personas", personaId],
@@ -189,8 +190,12 @@ export default function Chat() {
       queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "chat"] });
       setShowStarters(false);
     },
-    onError: () => {
-      toast({ title: "Couldn't send message", description: "Please try again.", variant: "destructive" });
+    onError: (err: Error) => {
+      if (err.message.includes("403")) {
+        setMessageLimitHit(true);
+      } else {
+        toast({ title: "Couldn't send message", description: "Please try again.", variant: "destructive" });
+      }
     },
   });
 
@@ -389,41 +394,59 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Input bar */}
-      <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur-sm">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3">
-          <div className="flex items-end gap-3">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={`Message ${firstName}…`}
-              rows={1}
-              className="flex-1 resize-none min-h-[40px] max-h-32 rounded-xl border-border bg-card text-sm"
-              data-testid="input-chat-message"
-              style={{ height: "auto" }}
-              onInput={e => {
-                const el = e.currentTarget;
-                el.style.height = "auto";
-                el.style.height = Math.min(el.scrollHeight, 128) + "px";
-              }}
-            />
-            <Button
-              size="icon"
-              className="h-10 w-10 rounded-xl flex-shrink-0"
-              disabled={!input.trim() || sendMutation.isPending}
-              onClick={handleSend}
-              data-testid="button-send-message"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+      {/* Message limit banner */}
+      {messageLimitHit && (
+        <div className="flex-shrink-0 border-t border-border bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+          <div className="max-w-2xl mx-auto text-center space-y-2">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+              You've used all 20 free messages. Upgrade for unlimited messaging.
+            </p>
+            <Link href="/pricing">
+              <Button size="sm" className="gap-1.5">
+                View Plans
+              </Button>
+            </Link>
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5 text-center">
-            Powered by {persona?.name}'s memories and values
-          </p>
         </div>
-      </div>
+      )}
+
+      {/* Input bar */}
+      {!messageLimitHit && (
+        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur-sm">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3">
+            <div className="flex items-end gap-3">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={`Message ${firstName}…`}
+                rows={1}
+                className="flex-1 resize-none min-h-[40px] max-h-32 rounded-xl border-border bg-card text-sm"
+                data-testid="input-chat-message"
+                style={{ height: "auto" }}
+                onInput={e => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = Math.min(el.scrollHeight, 128) + "px";
+                }}
+              />
+              <Button
+                size="icon"
+                className="h-10 w-10 rounded-xl flex-shrink-0"
+                disabled={!input.trim() || sendMutation.isPending}
+                onClick={handleSend}
+                data-testid="button-send-message"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5 text-center">
+              Powered by {persona?.name}'s memories and values
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
