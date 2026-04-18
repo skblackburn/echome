@@ -290,6 +290,7 @@ export interface IStorage {
   }>): Promise<User | undefined>;
   getUserByStripeCustomerId(customerId: string): Promise<User | undefined>;
   incrementMessageCount(userId: number): Promise<void>;
+  getMonthlyMessageCount(userId: number): Promise<number>;
 }
 
 export class PgStorage implements IStorage {
@@ -546,6 +547,19 @@ export class PgStorage implements IStorage {
     if (user) {
       await db.update(schema.users).set({ totalMessagesSent: (user.totalMessagesSent ?? 0) + 1 }).where(eq(schema.users.id, userId));
     }
+  }
+  async getMonthlyMessageCount(userId: number): Promise<number> {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await client`
+      SELECT COUNT(*) as count
+      FROM chat_messages cm
+      INNER JOIN personas p ON cm.persona_id = p.id
+      WHERE p.user_id = ${userId}
+        AND cm.role = 'user'
+        AND cm.created_at >= ${firstOfMonth}
+    `;
+    return parseInt(result[0]?.count || "0", 10);
   }
 }
 

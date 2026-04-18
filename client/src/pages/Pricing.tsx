@@ -28,8 +28,8 @@ const tiers = [
     monthlyPriceId: null,
     annualPriceId: null,
     echoes: "1 Echo",
-    messages: "20 messages",
-    features: ["1 Echo persona", "20 total messages", "Memory archive", "Voice recordings", "1 milestone message"],
+    messages: "20 messages/month",
+    features: ["1 Echo persona", "20 messages/month", "Memory archive", "Voice recordings", "1 milestone message"],
   },
   {
     name: "Personal",

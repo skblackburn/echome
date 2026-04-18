@@ -589,7 +589,7 @@ export default function CreatePersona() {
           ? `Created with ${selectedMemories.size} imported ${selectedMemories.size === 1 ? "memory" : "memories"}.`
           : "Now let's add their memories and personality.",
       });
-      navigate(`/persona/${persona.id}/upload-guidance`);
+      navigate(`/persona/${persona.id}/questions`);
     },
     onError: (e: Error) => {
       if (e.message.includes("403") || e.message.includes("ECHO_LIMIT")) {

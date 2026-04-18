@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   ArrowRight, ChevronDown, FileText, Mail, MessageSquare,
-  BookOpen, Lightbulb, CheckCircle2, AlertCircle, HelpCircle
+  BookOpen, Lightbulb, CheckCircle2, AlertCircle, HelpCircle, SkipForward
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -104,16 +104,20 @@ export default function UploadGuidance() {
     navigate(`/persona/${personaId}/memories`);
   };
 
+  const handleSkip = () => {
+    navigate(`/persona/${personaId}`);
+  };
+
   return (
     <Layout backTo={`/persona/${personaId}`} backLabel="Back">
       <div className="max-w-xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-display text-xl sm:text-2xl font-semibold text-foreground mb-2">
-            Before you upload
+            Add their writing for an even richer Echo
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            The documents you share shape how authentic the Echo feels. Here's how to get the best results.
+            Your Echo is already taking shape from the details you shared. Uploading letters, emails, or journals will help capture exactly how they wrote.
           </p>
         </div>
 
@@ -230,16 +234,17 @@ export default function UploadGuidance() {
 
         {/* CTAs */}
         <div className="mt-8 space-y-3">
-          <Button className="w-full gap-2" onClick={handleContinue}>
-            Continue to Upload <ArrowRight className="h-4 w-4" />
-          </Button>
-          <button
-            type="button"
-            onClick={handleContinue}
-            className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-2"
-          >
-            Skip for now
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" className="gap-2" onClick={handleSkip}>
+              <SkipForward className="h-4 w-4" /> Skip for now
+            </Button>
+            <Button className="gap-2" onClick={handleContinue}>
+              Continue to Upload <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground text-center">
+            You can always add documents later from your Echo's page.
+          </p>
         </div>
       </div>
     </Layout>
