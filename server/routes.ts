@@ -580,15 +580,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch (_) {}
     }
 
+    const plan = user.plan || "free";
+    const limits = PLAN_LIMITS[plan];
+    const monthlyMessageCount = limits.messages !== null
+      ? await storage.getMonthlyMessageCount(user.id)
+      : 0;
+
     res.json({
-      plan: user.plan || "free",
+      plan,
       planInterval: user.planInterval,
       planExpiresAt: user.planExpiresAt,
       totalMessagesSent: user.totalMessagesSent ?? 0,
+      monthlyMessageCount,
       stripeCustomerId: user.stripeCustomerId,
       stripeSubscriptionId: user.stripeSubscriptionId,
       cancelAtPeriodEnd,
-      limits: PLAN_LIMITS[user.plan || "free"],
+      limits: PLAN_LIMITS[plan],
     });
   });
 
@@ -1173,19 +1180,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // Tier enforcement: check message limit for free tier users
+    // Tier enforcement: check monthly message limit for free tier users
     const user = await storage.getUserById(req.user!.id);
     if (user) {
       const plan = user.plan || "free";
       const limits = PLAN_LIMITS[plan];
-      if (limits.messages !== null && (user.totalMessagesSent ?? 0) >= limits.messages) {
-        return res.status(403).json({
-          error: `You've used all ${limits.messages} free messages. Upgrade for unlimited messaging.`,
-          code: "MESSAGE_LIMIT",
-          currentCount: user.totalMessagesSent ?? 0,
-          limit: limits.messages,
-          plan,
-        });
+      if (limits.messages !== null) {
+        const monthlyCount = await storage.getMonthlyMessageCount(req.user!.id);
+        if (monthlyCount >= limits.messages) {
+          return res.status(403).json({
+            error: `You've used all ${limits.messages} messages this month. Upgrade for unlimited messaging.`,
+            code: "MESSAGE_LIMIT",
+            currentCount: monthlyCount,
+            limit: limits.messages,
+            plan,
+          });
+        }
       }
     }
 

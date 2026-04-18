@@ -399,7 +399,7 @@ export default function Chat() {
         <div className="flex-shrink-0 border-t border-border bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
           <div className="max-w-2xl mx-auto text-center space-y-2">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-              You've used all 20 free messages. Upgrade for unlimited messaging.
+              You've used all 20 messages this month. Upgrade for unlimited messaging.
             </p>
             <Link href="/pricing">
               <Button size="sm" className="gap-1.5">

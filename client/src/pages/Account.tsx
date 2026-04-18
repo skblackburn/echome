@@ -35,6 +35,7 @@ interface SubscriptionInfo {
   planInterval: string | null;
   planExpiresAt: string | null;
   totalMessagesSent: number;
+  monthlyMessageCount: number;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   cancelAtPeriodEnd: boolean;
@@ -188,11 +189,11 @@ export default function Account() {
               </p>
             </div>
             <div className="p-3 rounded-lg bg-muted/50">
-              <p className="text-xs text-muted-foreground">Messages</p>
+              <p className="text-xs text-muted-foreground">Messages this month</p>
               <p className="text-sm font-medium text-foreground">
                 {subscription?.limits?.messages === null
                   ? "Unlimited"
-                  : `${subscription?.totalMessagesSent ?? 0} / ${subscription?.limits?.messages ?? 20}`}
+                  : `${subscription?.monthlyMessageCount ?? 0} / ${subscription?.limits?.messages ?? 20}`}
               </p>
             </div>
           </div>
