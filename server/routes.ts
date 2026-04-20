@@ -4,6 +4,7 @@ import express from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import archiver from "archiver";
 import OpenAI from "openai";
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
@@ -14,6 +15,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import Stripe from "stripe";
 import { storage, db } from "./storage";
+import { sendWelcomeEmail } from "./email";
 import {
   insertPersonaSchema,
   insertTraitSchema,
@@ -549,6 +551,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (await storage.getUserByEmail(email)) return res.status(409).json({ error: "An account with that email already exists" });
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await storage.createUser({ email, passwordHash, name });
+    // Send welcome email (fire-and-forget)
+    sendWelcomeEmail(user.email, user.name).catch(err => console.error("Welcome email failed:", err));
     req.login({ id: user.id, email: user.email, name: user.name }, err => {
       if (err) return res.status(500).json({ error: "Login after register failed" });
       res.status(201).json({ id: user.id, email: user.email, name: user.name });
@@ -785,6 +789,144 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     await storage.updateUserStatus(user.id, "active");
     res.json({ success: true, message: "Account reactivated" });
+  });
+
+  // ── Data Export ─────────────────────────────────────────────────────────────
+  app.get("/api/account/export", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const user = await storage.getUserById(userId);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const dateStr = new Date().toISOString().split("T")[0];
+      const folderName = `echome-backup-${dateStr}`;
+
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", `attachment; filename="${folderName}.zip"`);
+
+      const archive = archiver("zip", { zlib: { level: 5 } });
+      archive.on("error", (err: Error) => { res.status(500).end(); });
+      archive.pipe(res);
+
+      // Profile
+      archive.append(JSON.stringify({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.plan,
+        planInterval: user.planInterval,
+        status: user.status,
+        totalMessagesSent: user.totalMessagesSent,
+        createdAt: user.createdAt,
+      }, null, 2), { name: `${folderName}/profile.json` });
+
+      // Gather all persona data
+      const personas = await storage.getPersonasByUser(userId);
+
+      for (const persona of personas) {
+        const safeName = persona.name.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+        const echoDir = `${folderName}/echoes/${safeName}`;
+
+        // Settings
+        archive.append(JSON.stringify({
+          id: persona.id,
+          name: persona.name,
+          relationship: persona.relationship,
+          birthYear: persona.birthYear,
+          deathYear: persona.deathYear,
+          passingDate: persona.passingDate,
+          isLiving: persona.isLiving,
+          bio: persona.bio,
+          spouse: persona.spouse,
+          children: persona.children,
+          pronouns: persona.pronouns,
+          birthPlace: persona.birthPlace,
+          selfMode: persona.selfMode,
+          creatorName: persona.creatorName,
+          creatorRelationship: persona.creatorRelationship,
+          creatorNote: persona.creatorNote,
+          remembranceDate: persona.remembranceDate,
+          createdAt: persona.createdAt,
+        }, null, 2), { name: `${echoDir}/settings.json` });
+
+        // Traits
+        const traits = await storage.getTraits(persona.id);
+        archive.append(JSON.stringify(traits.map(t => ({
+          category: t.category,
+          content: t.content,
+          createdAt: t.createdAt,
+        })), null, 2), { name: `${echoDir}/traits.json` });
+
+        // Documents (memories)
+        const memories = await storage.getMemories(persona.id);
+        archive.append(JSON.stringify(memories.map(m => ({
+          type: m.type,
+          title: m.title,
+          content: m.content,
+          period: m.period,
+          tags: m.tags,
+          documentType: m.documentType,
+          contributedBy: m.contributedBy,
+          createdAt: m.createdAt,
+        })), null, 2), { name: `${echoDir}/documents.json` });
+
+        // Conversations
+        const chatHistory = await storage.getChatHistory(persona.id);
+        archive.append(JSON.stringify(chatHistory.map(c => ({
+          role: c.role,
+          content: c.content,
+          createdAt: c.createdAt,
+        })), null, 2), { name: `${echoDir}/conversations.json` });
+
+        // Milestones
+        const milestones = await storage.getMilestones(persona.id);
+        archive.append(JSON.stringify(milestones.map(m => ({
+          title: m.title,
+          occasion: m.occasion,
+          recipientName: m.recipientName,
+          recipientEmail: m.recipientEmail,
+          messagePrompt: m.messagePrompt,
+          generatedMessage: m.generatedMessage,
+          scheduledDate: m.scheduledDate,
+          scheduledTime: m.scheduledTime,
+          status: m.status,
+          createdAt: m.createdAt,
+        })), null, 2), { name: `${echoDir}/milestones.json` });
+
+        // Writing style
+        const writingStyle = await storage.getWritingStyle(persona.id);
+        archive.append(JSON.stringify(writingStyle ? {
+          sentenceStructure: writingStyle.sentenceStructure,
+          vocabularyLevel: writingStyle.vocabularyLevel,
+          punctuationHabits: writingStyle.punctuationHabits,
+          toneAndEmotion: writingStyle.toneAndEmotion,
+          commonPhrases: writingStyle.commonPhrases,
+          formality: writingStyle.formality,
+          narrativeStyle: writingStyle.narrativeStyle,
+          quirks: writingStyle.quirks,
+          overallSummary: writingStyle.overallSummary,
+          analyzedDocumentCount: writingStyle.analyzedDocumentCount,
+          lastAnalyzedAt: writingStyle.lastAnalyzedAt,
+        } : null, null, 2), { name: `${echoDir}/writing-style.json` });
+
+        // Family members
+        const familyMembers = await storage.getFamilyMembers(persona.id);
+        if (familyMembers.length > 0) {
+          archive.append(JSON.stringify(familyMembers.map(f => ({
+            name: f.name,
+            relationship: f.relationship,
+            birthYear: f.birthYear,
+            note: f.note,
+            createdAt: f.createdAt,
+          })), null, 2), { name: `${echoDir}/family-members.json` });
+        }
+      }
+
+      await archive.finalize();
+    } catch (err) {
+      console.error("Export error:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Failed to generate export" });
+    }
   });
 
   // ── Serve uploaded files ────────────────────────────────────────────────────
