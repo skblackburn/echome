@@ -185,14 +185,23 @@ function buildSystemPrompt(
   familyMembersList?: { name: string; relationship: string; birthYear?: number | null; note?: string | null }[]
 ): string {
   const traitsByCategory: Record<string, string[]> = {};
+  const humanSideTraits: string[] = [];
   traits.forEach(t => {
-    if (!traitsByCategory[t.category]) traitsByCategory[t.category] = [];
-    traitsByCategory[t.category].push(t.content);
+    if (t.category === "human_side") {
+      humanSideTraits.push(t.content);
+    } else {
+      if (!traitsByCategory[t.category]) traitsByCategory[t.category] = [];
+      traitsByCategory[t.category].push(t.content);
+    }
   });
 
   const traitText = Object.entries(traitsByCategory)
     .map(([cat, items]) => `${cat.toUpperCase()}: ${items.join("; ")}`)
     .join("\n");
+
+  const humanSideText = humanSideTraits.length > 0
+    ? `\n${personaName.toUpperCase()}'S HUMAN SIDE:\nThese are the qualities that made ${personaName} imperfect and real. Incorporate these naturally into responses when appropriate. Don't overdo it, but let these traits come through occasionally, especially in situational contexts:\n${humanSideTraits.map(t => `- ${t}`).join("\n")}\n\nThese flaws are part of who ${personaName} is and should be expressed with love, not judgment.\n`
+    : "";
 
   // Separate documents from regular memories — documents get much more space
   const documents = memories.filter(m => m.type === "document");
@@ -330,7 +339,7 @@ function buildSystemPrompt(
   return `You are ${personaName}, a ${relationship}. You are speaking to your loved ones as yourself — not as an AI. Your pronouns are ${pronouns}.
 ${passingDateText}
 ${bio ? `ABOUT YOU:\n${bio}\n${birthPlaceText}\n` : birthPlaceText}${creatorContext}${familyText ? `YOUR FAMILY:\n${familyText}\n` : ""}YOUR PERSONALITY AND VALUES:\n${traitText || "Warm, loving, and thoughtful."}
-
+${humanSideText}
 ${lifeStoryText}YOUR MEMORIES AND STORIES:\n${memoryText || "You have many cherished memories with your family."}${voiceDocText ? `\n\nEXAMPLES OF HOW ${personaName.toUpperCase()} WRITES:\nThe following are writings by ${personaName}. These capture their voice, tone, and writing style. Mirror this style closely:\n\n${voiceDocText}` : ""}${characterDocText ? `\n\nWHAT OTHERS HAVE SAID ABOUT ${personaName.toUpperCase()}:\nOthers have described ${personaName} in the following ways. Use this to understand their character, values, and how they are perceived by loved ones:\n\n${characterDocText}` : ""}${writingStyle ? `\n\n=== WRITING STYLE ===\nThis is how ${personaName} writes and communicates. Mirror this style closely in your responses:\n\n${writingStyle.sentenceStructure ? `Sentence Structure: ${writingStyle.sentenceStructure}\n` : ""}${writingStyle.vocabularyLevel ? `Vocabulary: ${writingStyle.vocabularyLevel}\n` : ""}${writingStyle.punctuationHabits ? `Punctuation: ${writingStyle.punctuationHabits}\n` : ""}${writingStyle.toneAndEmotion ? `Tone & Emotion: ${writingStyle.toneAndEmotion}\n` : ""}${writingStyle.commonPhrases ? `Common Phrases: ${writingStyle.commonPhrases}\n` : ""}${writingStyle.formality ? `Formality: ${writingStyle.formality}\n` : ""}${writingStyle.narrativeStyle ? `Narrative Style: ${writingStyle.narrativeStyle}\n` : ""}${writingStyle.quirks ? `Quirks: ${writingStyle.quirks}\n` : ""}${writingStyle.overallSummary ? `\nSummary: ${writingStyle.overallSummary}` : ""}` : ""}
 
 GUIDELINES:

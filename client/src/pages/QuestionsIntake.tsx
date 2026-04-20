@@ -8,7 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowRight, Heart, MessageSquare, Lightbulb,
-  Smile, Sparkles, BookOpen, Star, ChevronRight, SkipForward
+  Smile, Sparkles, BookOpen, Star, ChevronRight, SkipForward,
+  CloudRain, Flame, ShieldAlert, Quote, Users, Zap, HandMetal
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Persona, Trait } from "@shared/schema";
@@ -91,6 +92,67 @@ const QUESTIONS: QuestionItem[] = [
   },
 ];
 
+const HUMAN_SIDE_QUESTIONS: QuestionItem[] = [
+  {
+    id: "flaws",
+    icon: CloudRain,
+    question: "They could be a little...",
+    placeholder: "stubborn, impatient, overprotective, blunt, scattered...",
+    traitCategory: "human_side",
+    color: "bg-rose-100/80 text-rose-500 dark:bg-rose-900/30 dark:text-rose-400",
+  },
+  {
+    id: "stress_reaction",
+    icon: Flame,
+    question: "In stressful situations, they tended to...",
+    placeholder: "shut down, get snappy, overthink, deflect with humor...",
+    traitCategory: "human_side",
+    color: "bg-amber-100/80 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
+  },
+  {
+    id: "not_great_at",
+    icon: ShieldAlert,
+    question: "They weren't great at...",
+    placeholder: "expressing emotions, being on time, admitting they were wrong, asking for help...",
+    traitCategory: "human_side",
+    color: "bg-violet-100/80 text-violet-500 dark:bg-violet-900/30 dark:text-violet-400",
+  },
+  {
+    id: "loving_criticism",
+    icon: Quote,
+    question: "A loving criticism someone might say about them",
+    placeholder: "She worried too much about everyone else and never took care of herself...",
+    traitCategory: "human_side",
+    color: "bg-pink-100/80 text-pink-500 dark:bg-pink-900/30 dark:text-pink-400",
+  },
+  {
+    id: "with_family",
+    icon: Users,
+    question: "With family, they were...",
+    placeholder: "warm and protective, sometimes overbearing, always the first to call...",
+    traitCategory: "human_side",
+    color: "bg-sky-100/80 text-sky-500 dark:bg-sky-900/30 dark:text-sky-400",
+  },
+  {
+    id: "under_stress",
+    icon: Zap,
+    question: "Under stress, they became...",
+    placeholder: "quiet and withdrawn, or the opposite — took charge of everything...",
+    traitCategory: "human_side",
+    color: "bg-orange-100/80 text-orange-500 dark:bg-orange-900/30 dark:text-orange-400",
+  },
+  {
+    id: "with_strangers",
+    icon: HandMetal,
+    question: "With strangers, they tended to be...",
+    placeholder: "shy at first but warm once comfortable, or instantly friendly with everyone...",
+    traitCategory: "human_side",
+    color: "bg-emerald-100/80 text-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-400",
+  },
+];
+
+const ALL_QUESTIONS = [...QUESTIONS, ...HUMAN_SIDE_QUESTIONS];
+
 function QuestionCard({
   question,
   answer,
@@ -170,7 +232,7 @@ export default function QuestionsIntake() {
 
       // Match existing traits to questions by category
       existingTraits.forEach(trait => {
-        const matchingQuestion = QUESTIONS.find(
+        const matchingQuestion = ALL_QUESTIONS.find(
           q => q.traitCategory === trait.category && !prefilled[q.id]
         );
         if (matchingQuestion) {
@@ -196,7 +258,7 @@ export default function QuestionsIntake() {
       );
 
       for (const [questionId, content] of toSave) {
-        const question = QUESTIONS.find(q => q.id === questionId);
+        const question = ALL_QUESTIONS.find(q => q.id === questionId);
         if (!question) continue;
 
         await apiRequest("POST", `/api/personas/${personaId}/traits`, {
@@ -253,11 +315,11 @@ export default function QuestionsIntake() {
             <div className="flex-1 bg-muted rounded-full h-2">
               <div
                 className="h-2 rounded-full bg-primary transition-all"
-                style={{ width: `${Math.min((answeredCount / QUESTIONS.length) * 100, 100)}%` }}
+                style={{ width: `${Math.min((answeredCount / ALL_QUESTIONS.length) * 100, 100)}%` }}
               />
             </div>
             <span className="text-xs text-muted-foreground whitespace-nowrap">
-              {answeredCount} of {QUESTIONS.length}
+              {answeredCount} of {ALL_QUESTIONS.length}
             </span>
           </div>
         )}
@@ -265,6 +327,36 @@ export default function QuestionsIntake() {
         {/* Question cards */}
         <div className="space-y-4">
           {QUESTIONS.map(question => (
+            <QuestionCard
+              key={question.id}
+              question={question}
+              answer={answers[question.id] || ""}
+              onChange={val => setAnswers(prev => ({ ...prev, [question.id]: val }))}
+              saved={savedQuestions.has(question.id)}
+            />
+          ))}
+        </div>
+
+        {/* Their Human Side section */}
+        <div className="mt-12 mb-8">
+          <div className="rounded-2xl border border-rose-200/60 dark:border-rose-800/30 bg-gradient-to-br from-rose-50/60 via-amber-50/30 to-background dark:from-rose-950/20 dark:via-amber-950/10 p-6 space-y-2">
+            <div className="flex items-center gap-2">
+              <CloudRain className="h-5 w-5 text-rose-400" />
+              <h2 className="font-display text-lg font-semibold text-foreground">
+                Their Human Side
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Nobody's perfect — and that's what makes them real. These details help {firstName}'s Echo feel authentic, not idealized.
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              All questions are optional. Skip any that don't feel right.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {HUMAN_SIDE_QUESTIONS.map(question => (
             <QuestionCard
               key={question.id}
               question={question}
