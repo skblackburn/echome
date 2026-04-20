@@ -838,6 +838,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         birthYear: body.birthYear || null,
         bio: body.bio || null,
         photo: req.file ? req.file.filename : body.photo || null,
+        avatarUrl: body.avatarUrl || null,
         pronouns: body.pronouns || null,
         birthPlace: body.birthPlace || null,
         selfMode: body.selfMode === "true" || body.selfMode === true,
@@ -864,7 +865,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Explicit field mapping to ensure camelCase → schema alignment
     const fields = ["name","relationship","bio","status","spouse","children",
       "pronouns","birthYear","birthPlace","selfMode","creatorName",
-      "creatorRelationship","creatorNote","deathYear","remembranceDate","passingDate"];
+      "creatorRelationship","creatorNote","deathYear","remembranceDate","passingDate","avatarUrl"];
     fields.forEach(f => { if (b[f] !== undefined) updates[f] = b[f] || null; });
     // Handle booleans
     if (b.selfMode !== undefined) updates.selfMode = b.selfMode === "true" || b.selfMode === true;

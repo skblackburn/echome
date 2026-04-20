@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Camera, Trash2, Heart } from "lucide-react";
+import { Save, Camera, Trash2, Heart, Plus, X } from "lucide-react";
 import type { Persona } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +47,8 @@ export default function EditPersona() {
   const [passingDate, setPassingDate] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const avatarRef = useRef<HTMLInputElement>(null);
 
   // Populate form when persona loads
   useEffect(() => {
@@ -61,6 +63,7 @@ export default function EditPersona() {
       setRemembranceDate((persona as any).remembranceDate || "");
       setIsLiving((persona as any).isLiving !== false);
       setPassingDate((persona as any).passingDate || "");
+      setAvatarUrl((persona as any).avatarUrl || null);
     }
   }, [persona]);
 
@@ -70,6 +73,21 @@ export default function EditPersona() {
       setPhotoFile(file);
       setPhotoPreview(URL.createObjectURL(file));
     }
+  };
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      toast({ title: "Invalid file type", description: "Please upload a JPG, PNG, or WebP image.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   const saveMutation = useMutation({
@@ -87,6 +105,7 @@ export default function EditPersona() {
       if (!isLiving && passingDate) form.append("passingDate", passingDate);
       if (isLiving) form.append("passingDate", "");
       if (photoFile) form.append("photo", photoFile);
+      if (avatarUrl !== undefined) form.append("avatarUrl", avatarUrl || "");
 
       const res = await fetch(`${API_BASE}/api/personas/${personaId}`, {
         method: "PATCH",
@@ -139,23 +158,38 @@ export default function EditPersona() {
           <p className="text-sm text-muted-foreground">Changes here update how the AI understands and speaks as {firstName}.</p>
         </div>
 
-        {/* Photo */}
+        {/* Avatar / Photo */}
         <div className="flex items-center gap-4">
-          <button type="button" onClick={() => photoRef.current?.click()}
-            className="flex-shrink-0 w-20 h-20 rounded-full border-2 border-dashed border-border flex items-center justify-center bg-muted/50 hover:bg-muted hover:border-primary/40 transition-all cursor-pointer overflow-hidden group">
-            {currentPhoto ? (
-              <img src={currentPhoto} alt="Preview" className="w-full h-full object-cover" />
-            ) : (
-              <div className="flex flex-col items-center gap-1 text-muted-foreground group-hover:text-primary transition-colors">
-                <Camera className="h-5 w-5" />
-                <span className="text-xs">Photo</span>
-              </div>
+          <div className="relative">
+            <button type="button" onClick={() => avatarRef.current?.click()}
+              className="flex-shrink-0 w-24 h-24 rounded-full border-2 border-dashed border-primary/30 flex items-center justify-center bg-background hover:bg-primary/5 hover:border-primary/50 transition-all cursor-pointer overflow-hidden group">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : currentPhoto ? (
+                <img src={currentPhoto} alt="Preview" className="w-full h-full object-cover" />
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-primary/50 group-hover:text-primary transition-colors">
+                  <Plus className="h-6 w-6" />
+                  <span className="text-xs font-medium">Photo</span>
+                </div>
+              )}
+            </button>
+            {avatarUrl && (
+              <button
+                type="button"
+                onClick={() => setAvatarUrl(null)}
+                className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:bg-destructive/90 transition-colors"
+                title="Remove photo"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             )}
-          </button>
+          </div>
+          <input ref={avatarRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarUpload} className="hidden" />
           <input ref={photoRef} type="file" accept="image/*" onChange={handlePhoto} className="hidden" />
           <div>
-            <p className="text-sm font-medium text-foreground">Profile photo</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Click to change. Optional.</p>
+            <p className="text-sm font-medium text-foreground">Add a photo of {firstName}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">JPG, PNG, or WebP. Displayed on their Echo card and in chat.</p>
           </div>
         </div>
 

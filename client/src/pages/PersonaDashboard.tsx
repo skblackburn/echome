@@ -214,7 +214,10 @@ export default function PersonaDashboard() {
 
         {/* Hero */}
         <div className="flex items-start gap-5">
-          {persona.photo ? (
+          {(persona as any).avatarUrl ? (
+            <img src={(persona as any).avatarUrl} alt={persona.name}
+              className="w-20 h-20 rounded-full object-cover ring-2 ring-primary/25 flex-shrink-0" />
+          ) : persona.photo ? (
             <img src={`${API_BASE}/uploads/${persona.photo}`} alt={persona.name}
               className="w-20 h-20 rounded-full object-cover ring-2 ring-border flex-shrink-0" />
           ) : (

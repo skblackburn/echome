@@ -16,19 +16,32 @@ const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 
 const DEFAULT_STARTERS = [
-  "What do you wish you'd told me more often?",
-  "What was your happiest memory?",
-  "What advice would you give me about love?",
-  "Tell me about your childhood.",
-  "What did you want most for me?",
-  "What made you laugh?",
-  "What are you most proud of in your life?",
+  "What's your favorite memory of us?",
+  "What advice would you give me right now?",
+  "Tell me about when you were my age",
+  "What's something I don't know about you?",
+  "What are you most proud of?",
+  "What would you say to me on a hard day?",
+  "Tell me a story from your childhood",
+  "What do you wish you had done differently?",
+  "What's the best advice you ever received?",
+  "What made you fall in love?",
+  "What's your happiest memory?",
+  "What would you want me to remember about you?",
 ];
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 function getPersonaStarters(persona: Persona | undefined): string[] {
-  if (!persona) return DEFAULT_STARTERS;
+  if (!persona) return shuffleArray(DEFAULT_STARTERS).slice(0, 6);
   const starters: string[] = [];
-  const name = persona.name?.split(" ")[0] || "you";
   const p = persona as any;
 
   if (p.favoritePlace || p.hometown) starters.push(`Tell me about your favorite place.`);
@@ -46,8 +59,9 @@ function getPersonaStarters(persona: Persona | undefined): string[] {
   if (p.career) starters.push(`Tell me about your work and what it meant to you.`);
   if (p.loveLanguage) starters.push(`How did you show people you loved them?`);
 
-  // Fill with defaults if not enough persona-specific starters
-  const combined = [...starters, ...DEFAULT_STARTERS];
+  // Fill with randomized defaults to reach 6 total
+  const remaining = shuffleArray(DEFAULT_STARTERS.filter(s => !starters.includes(s)));
+  const combined = [...starters, ...remaining];
   return combined.slice(0, 6);
 }
 
@@ -101,7 +115,7 @@ function SpeakButton({ text }: { text: string }) {
   );
 }
 
-function MessageBubble({ message, personaName }: { message: ChatMessage; personaName: string }) {
+function MessageBubble({ message, personaName, avatarUrl }: { message: ChatMessage; personaName: string; avatarUrl?: string | null }) {
   const isUser = message.role === "user";
   return (
     <div
@@ -110,9 +124,13 @@ function MessageBubble({ message, personaName }: { message: ChatMessage; persona
     >
       {/* Avatar */}
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
-          <EchoMeLogo size={16} className="text-primary" />
-        </div>
+        avatarUrl ? (
+          <img src={avatarUrl} alt={personaName} className="flex-shrink-0 w-8 h-8 rounded-full object-cover ring-1 ring-primary/25" />
+        ) : (
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
+            <EchoMeLogo size={16} className="text-primary" />
+          </div>
+        )
       )}
 
       <div className={cn("max-w-[75%] space-y-1", isUser ? "items-end" : "items-start")}>
@@ -151,6 +169,7 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState("");
   const [showStarters, setShowStarters] = useState(false);
+  const [startersDismissed, setStartersDismissed] = useState(false);
   const [messageLimitHit, setMessageLimitHit] = useState(false);
 
   const { data: persona } = useQuery<Persona>({
@@ -213,9 +232,14 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sendMutation.isPending]);
 
-  // Show starters only when no messages
+  // Show starters when fewer than 2 messages; show suggested section on return visits
   useEffect(() => {
-    setShowStarters(messages.length === 0);
+    if (messages.length < 2) {
+      setShowStarters(true);
+      setStartersDismissed(false);
+    } else {
+      setShowStarters(false);
+    }
   }, [messages]);
 
   const handleSend = () => {
@@ -247,15 +271,23 @@ export default function Chat() {
           <div className="flex items-center gap-3">
             {!viewerCode ? (
               <Link href={`/persona/${personaId}`}>
-                <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 text-muted-foreground hover:text-foreground text-sm">
-                  ← {persona?.name || "Back"}
+                <Button variant="ghost" size="sm" className="gap-2 -ml-2 text-muted-foreground hover:text-foreground text-sm">
+                  ←
+                  {(persona as any)?.avatarUrl ? (
+                    <img src={(persona as any).avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover ring-1 ring-primary/25" />
+                  ) : null}
+                  {persona?.name || "Back"}
                 </Button>
               </Link>
             ) : (
               <div className="flex items-center gap-2 -ml-1">
-                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center">
-                  <EchoMeLogo size={12} className="text-primary" />
-                </div>
+                {(persona as any)?.avatarUrl ? (
+                  <img src={(persona as any).avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover ring-1 ring-primary/25" />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center">
+                    <EchoMeLogo size={12} className="text-primary" />
+                  </div>
+                )}
                 <span className="text-sm font-medium text-foreground">{persona?.name?.split(" ")[0]}</span>
               </div>
             )}
@@ -278,7 +310,7 @@ export default function Chat() {
             )}
             <Button variant="ghost" size="sm"
               className="gap-1.5 text-xs text-muted-foreground"
-              onClick={() => setShowStarters(s => !s)}
+              onClick={() => { setShowStarters(s => !s); setStartersDismissed(false); }}
               title="Conversation suggestions">
               <Lightbulb className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Suggest</span>
@@ -320,9 +352,13 @@ export default function Chat() {
           {/* Intro / welcome */}
           {!messagesLoading && messages.length === 0 && (
             <div className="text-center py-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 breathing">
-                <EchoMeLogo size={28} className="text-primary" />
-              </div>
+              {(persona as any)?.avatarUrl ? (
+                <img src={(persona as any).avatarUrl} alt={persona?.name || ""} className="w-16 h-16 rounded-full object-cover ring-2 ring-primary/25 mx-auto mb-4 breathing" />
+              ) : (
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 breathing">
+                  <EchoMeLogo size={28} className="text-primary" />
+                </div>
+              )}
               <h2 className="font-display text-xl font-semibold text-foreground mb-2">
                 {firstName} is here
               </h2>
@@ -333,18 +369,19 @@ export default function Chat() {
             </div>
           )}
 
-          {/* Conversation starters — shown when no messages, collapsible when there are messages */}
-          {messages.length === 0 && (
+          {/* Conversation starters — full view when fewer than 2 messages */}
+          {showStarters && messages.length < 2 && (
             <div className="pt-2">
-              <p className="text-xs font-medium text-muted-foreground mb-2.5 text-center">Things you might ask</p>
-              <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground mb-3 text-center">Things you might ask</p>
+              <div className="flex flex-wrap gap-2 justify-center">
                 {getPersonaStarters(enrichedPersona as Persona).map(s => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => useStarter(s)}
-                    className="text-sm text-left px-4 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/60
-                               hover:border-primary/30 text-foreground/80 hover:text-foreground transition-all"
+                    className="text-sm px-4 py-2 rounded-full border border-primary/30 bg-background
+                               hover:bg-primary/10 hover:border-primary/50
+                               text-primary/80 hover:text-primary transition-all"
                     data-testid="button-conversation-starter"
                   >
                     {s}
@@ -353,29 +390,47 @@ export default function Chat() {
               </div>
             </div>
           )}
-          {/* Collapsed starters button when conversation is active */}
-          {messages.length > 0 && showStarters && (
-            <div className="flex flex-wrap gap-1.5 py-2">
-              {getPersonaStarters(enrichedPersona as Persona).slice(0, 3).map(s => (
-                <button key={s} type="button" onClick={() => { useStarter(s); setShowStarters(false); }}
-                  className="text-xs px-3 py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 hover:border-primary/30 text-muted-foreground hover:text-foreground transition-all">
-                  {s}
+          {/* Smaller "Suggested" section on return visits with 2+ messages */}
+          {messages.length >= 2 && !startersDismissed && showStarters && (
+            <div className="py-2">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-muted-foreground">Suggested</p>
+                <button
+                  type="button"
+                  onClick={() => { setStartersDismissed(true); setShowStarters(false); }}
+                  className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  Dismiss
                 </button>
-              ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {getPersonaStarters(enrichedPersona as Persona).slice(0, 3).map(s => (
+                  <button key={s} type="button" onClick={() => { useStarter(s); setStartersDismissed(true); setShowStarters(false); }}
+                    className="text-xs px-3 py-1.5 rounded-full border border-primary/25 bg-background
+                               hover:bg-primary/10 hover:border-primary/40
+                               text-primary/70 hover:text-primary transition-all">
+                    {s}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Message list */}
           {messages.map(msg => (
-            <MessageBubble key={msg.id} message={msg} personaName={firstName} />
+            <MessageBubble key={msg.id} message={msg} personaName={firstName} avatarUrl={(persona as any)?.avatarUrl} />
           ))}
 
           {/* Typing indicator */}
           {sendMutation.isPending && (
             <div className="flex gap-3 message-in">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
-                <EchoMeLogo size={16} className="text-primary" />
-              </div>
+              {(persona as any)?.avatarUrl ? (
+                <img src={(persona as any).avatarUrl} alt="" className="flex-shrink-0 w-8 h-8 rounded-full object-cover ring-1 ring-primary/25" />
+              ) : (
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center ring-1 ring-primary/20">
+                  <EchoMeLogo size={16} className="text-primary" />
+                </div>
+              )}
               <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-md paper-surface">
                 <div className="flex gap-1 items-center h-5">
                   {[0, 1, 2].map(i => (

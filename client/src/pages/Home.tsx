@@ -35,7 +35,13 @@ function PersonaCard({ persona }: { persona: Persona }) {
         <div className="flex items-start gap-4">
           {/* Avatar */}
           <div className="flex-shrink-0">
-            {persona.photo ? (
+            {(persona as any).avatarUrl ? (
+              <img
+                src={(persona as any).avatarUrl}
+                alt={persona.name}
+                className="w-14 h-14 rounded-full object-cover ring-2 ring-primary/25"
+              />
+            ) : persona.photo ? (
               <img
                 src={`/uploads/${persona.photo}`}
                 alt={persona.name}
