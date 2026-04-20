@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EchoMeLogo, EchoMeWordmark } from "@/components/EchoMeLogo";
 import { ArrowRight, Check } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
   const [, navigate] = useLocation();
   const { register } = useAuth();
+  const { toast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +27,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(email, password, name);
+      toast({ title: "Welcome!", description: "Check your email for getting started tips." });
       navigate("/");
     } catch (err: any) {
       setError(err.message || "Something went wrong");

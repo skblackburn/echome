@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CreditCard, ExternalLink, Crown, AlertTriangle, PauseCircle, Trash2 } from "lucide-react";
+import { CreditCard, ExternalLink, Crown, AlertTriangle, PauseCircle, Trash2, Download } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -60,6 +60,7 @@ export default function Account() {
   // Account management state
   const [cancelAccountOpen, setCancelAccountOpen] = useState(false);
   const [cancelingAccount, setCancelingAccount] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0); // 0=closed, 1=warning, 2=confirm
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -133,6 +134,29 @@ export default function Account() {
       toast({ title: "Error", description: "Failed to delete account.", variant: "destructive" });
     } finally {
       setDeletingAccount(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/account/export");
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      a.download = `echome-backup-${date}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Export complete", description: "Your data backup has been downloaded." });
+    } catch (err) {
+      toast({ title: "Export failed", description: "Could not generate your data export.", variant: "destructive" });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -267,6 +291,31 @@ export default function Account() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
+          </div>
+        </Card>
+
+        {/* Data Export */}
+        <Card className="p-5 mb-5">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Download className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">Download My Data</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Download a complete backup of all your Echoes, conversations, documents, and settings.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 gap-1.5"
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                <Download className="h-3.5 w-3.5" />
+                {exporting ? "Preparing export…" : "Download Backup"}
+              </Button>
+            </div>
           </div>
         </Card>
 

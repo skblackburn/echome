@@ -29,6 +29,7 @@ import Reactivate from "@/pages/Reactivate";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Faq from "@/pages/Faq";
+import Privacy from "@/pages/Privacy";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated, or to reactivate if cancelled
@@ -67,6 +68,7 @@ function AppRoutes() {
         <Route path="/register" component={Register} />
         <Route path="/pricing" component={Pricing} />
         <Route path="/faq" component={Faq} />
+        <Route path="/privacy" component={Privacy} />
         <Route path="/join" component={JoinEcho} />
         <Route path="/persona/:id/chat" component={Chat} />
         <Route path="/persona/:id/contribute" component={Contribute} />
