@@ -444,6 +444,7 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [docTitle, setDocTitle] = useState("");
+  const [documentType, setDocumentType] = useState<"voice" | "character">("voice");
   const [uploading, setUploading] = useState(false);
 
   const { data: memories = [] } = useQuery<Memory[]>({
@@ -465,6 +466,7 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
       const form = new FormData();
       form.append("file", file);
       if (docTitle) form.append("title", docTitle);
+      form.append("documentType", documentType);
       const res = await fetch(`${API_BASE}/api/personas/${personaId}/documents`, { method: "POST", body: form });
       if (!res.ok) {
         const err = await res.json();
@@ -493,8 +495,40 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
       <div className="space-y-3">
         <div className="space-y-1.5">
           <Label>Document title <span className="text-muted-foreground text-xs">(optional)</span></Label>
-          <Input placeholder="e.g., Letters to family, 1987–1992" value={docTitle} onChange={e => setDocTitle(e.target.value)} />
+          <Input placeholder="e.g., Letters to family, 1987-1992" value={docTitle} onChange={e => setDocTitle(e.target.value)} />
         </div>
+
+        {/* Document type toggle */}
+        <div className="space-y-2">
+          <Label>Document type</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDocumentType("voice")}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                documentType === "voice"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="text-sm font-medium text-foreground">Written by {firstName}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Captures their voice and writing style</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDocumentType("character")}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                documentType === "character"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="text-sm font-medium text-foreground">Written about {firstName}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Letters, cards, or notes from others</div>
+            </button>
+          </div>
+        </div>
+
         <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
           className="flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50"
           data-testid="button-upload-document">

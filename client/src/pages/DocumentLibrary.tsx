@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FileText, Pencil, Trash2, Upload, Loader2 } from "lucide-react";
+import { FileText, Pencil, Trash2, Upload, Loader2, Pen, Users2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Persona } from "@shared/schema";
 
@@ -35,6 +37,7 @@ interface Document {
   title: string | null;
   content: string;
   contentPreview: string;
+  documentType: string;
   createdAt: string;
 }
 
@@ -47,7 +50,9 @@ export default function DocumentLibrary() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editTitle, setEditTitle] = useState("");
+  const [editDocumentType, setEditDocumentType] = useState<"voice" | "character">("voice");
   const [deletingDoc, setDeletingDoc] = useState<Document | null>(null);
+  const [filter, setFilter] = useState<"all" | "voice" | "character">("all");
 
   // Fetch persona info
   const { data: persona } = useQuery<Persona>({
@@ -71,11 +76,11 @@ export default function DocumentLibrary() {
 
   // Update document mutation
   const updateMutation = useMutation({
-    mutationFn: async ({ memoryId, content, title }: { memoryId: number; content: string; title: string }) => {
+    mutationFn: async ({ memoryId, content, title, documentType }: { memoryId: number; content: string; title: string; documentType: string }) => {
       const res = await fetch(`${API_BASE}/api/personas/${personaId}/documents/${memoryId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, title }),
+        body: JSON.stringify({ content, title, documentType }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Failed to save" }));
@@ -118,6 +123,7 @@ export default function DocumentLibrary() {
     setEditingDoc(doc);
     setEditContent(doc.content);
     setEditTitle(doc.title || "");
+    setEditDocumentType((doc.documentType || "voice") as "voice" | "character");
   };
 
   const handleSave = () => {
@@ -126,6 +132,7 @@ export default function DocumentLibrary() {
       memoryId: editingDoc.id,
       content: editContent,
       title: editTitle,
+      documentType: editDocumentType,
     });
   };
 
@@ -143,6 +150,13 @@ export default function DocumentLibrary() {
   };
 
   const firstName = persona?.name?.split(" ")[0] || "Echo";
+
+  const filteredDocuments = filter === "all"
+    ? documents
+    : documents.filter(d => (d.documentType || "voice") === filter);
+
+  const voiceCount = documents.filter(d => (d.documentType || "voice") === "voice").length;
+  const characterCount = documents.filter(d => d.documentType === "character").length;
 
   if (isLoading) {
     return (
@@ -166,7 +180,7 @@ export default function DocumentLibrary() {
               Uploaded Writing
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Documents that shape {firstName}'s writing style
+              Documents that shape {firstName}'s voice and character
             </p>
           </div>
           <Link href={`/persona/${personaId}/upload-guidance`}>
@@ -176,6 +190,42 @@ export default function DocumentLibrary() {
             </Button>
           </Link>
         </div>
+
+        {/* Filter tabs */}
+        {documents.length > 0 && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilter("all")}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                filter === "all"
+                  ? "bg-primary/10 text-primary border border-primary/30"
+                  : "text-muted-foreground border border-border hover:border-primary/30"
+              }`}
+            >
+              All ({documents.length})
+            </button>
+            <button
+              onClick={() => setFilter("voice")}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
+                filter === "voice"
+                  ? "bg-sky-100 text-sky-700 border border-sky-300/50 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800"
+                  : "text-muted-foreground border border-border hover:border-sky-300/50"
+              }`}
+            >
+              <Pen className="h-3 w-3" /> Voice ({voiceCount})
+            </button>
+            <button
+              onClick={() => setFilter("character")}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
+                filter === "character"
+                  ? "bg-purple-100 text-purple-700 border border-purple-300/50 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800"
+                  : "text-muted-foreground border border-border hover:border-purple-300/50"
+              }`}
+            >
+              <Users2 className="h-3 w-3" /> Character ({characterCount})
+            </button>
+          </div>
+        )}
 
         {/* Document list or empty state */}
         {documents.length === 0 ? (
@@ -200,50 +250,69 @@ export default function DocumentLibrary() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {documents.map((doc) => (
-              <Card
-                key={doc.id}
-                className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 paper-surface"
-                onClick={() => openEdit(doc)}
-              >
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400 flex-shrink-0 mt-0.5">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <h3 className="font-medium text-foreground text-sm truncate">
-                          {doc.title || doc.content.split("\n")[0]?.slice(0, 60) || "Untitled"}
-                        </h3>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          {formatDate(doc.createdAt)}
-                        </span>
+            {filteredDocuments.map((doc) => {
+              const isVoice = (doc.documentType || "voice") === "voice";
+              return (
+                <Card
+                  key={doc.id}
+                  className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 paper-surface"
+                  onClick={() => openEdit(doc)}
+                >
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${
+                        isVoice
+                          ? "bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400"
+                          : "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+                      }`}>
+                        {isVoice ? <Pen className="h-4 w-4" /> : <Users2 className="h-4 w-4" />}
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                        {doc.contentPreview}
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <h3 className="font-medium text-foreground text-sm truncate">
+                              {doc.title || doc.content.split("\n")[0]?.slice(0, 60) || "Untitled"}
+                            </h3>
+                            <Badge
+                              variant="outline"
+                              className={`text-xs flex-shrink-0 ${
+                                isVoice
+                                  ? "border-sky-300/50 text-sky-600 dark:text-sky-400"
+                                  : "border-purple-300/50 text-purple-600 dark:text-purple-400"
+                              }`}
+                            >
+                              {isVoice ? "Voice" : "Character"}
+                            </Badge>
+                          </div>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">
+                            {formatDate(doc.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                          {doc.contentPreview}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                        <button
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          onClick={(e) => { e.stopPropagation(); openEdit(doc); }}
+                          title="Edit document"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); setDeletingDoc(doc); }}
+                          title="Delete document"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                      <button
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        onClick={(e) => { e.stopPropagation(); openEdit(doc); }}
-                        title="Edit document"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); setDeletingDoc(doc); }}
-                        title="Delete document"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
@@ -261,6 +330,36 @@ export default function DocumentLibrary() {
               placeholder="Document title"
               className="flex-shrink-0"
             />
+
+            {/* Document type toggle in edit */}
+            <div className="flex-shrink-0">
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Document type</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditDocumentType("voice")}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                    editDocumentType === "voice"
+                      ? "border-sky-400 bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400 dark:border-sky-800"
+                      : "border-border text-muted-foreground hover:border-sky-300/50"
+                  }`}
+                >
+                  Written by {firstName}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditDocumentType("character")}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                    editDocumentType === "character"
+                      ? "border-purple-400 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800"
+                      : "border-border text-muted-foreground hover:border-purple-300/50"
+                  }`}
+                >
+                  Written about {firstName}
+                </button>
+              </div>
+            </div>
+
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}

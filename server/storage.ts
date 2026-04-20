@@ -70,9 +70,15 @@ export async function initDb() {
       creator_note TEXT,
       death_year TEXT,
       remembrance_date TEXT,
+      passing_date TEXT,
+      is_living BOOLEAN DEFAULT TRUE,
       status TEXT NOT NULL DEFAULT 'active',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  // Add new persona columns if they don't exist
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS passing_date TEXT`.catch(() => {});
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS is_living BOOLEAN DEFAULT TRUE`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS traits (
@@ -92,10 +98,14 @@ export async function initDb() {
       content TEXT NOT NULL,
       period TEXT,
       tags TEXT,
+      document_type TEXT DEFAULT 'voice',
       contributed_by TEXT,
       contributor_code TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  // Add new memory columns if they don't exist
+  await client`ALTER TABLE memories ADD COLUMN IF NOT EXISTS document_type TEXT DEFAULT 'voice'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS media (
@@ -172,10 +182,16 @@ export async function initDb() {
       name TEXT NOT NULL,
       relationship TEXT NOT NULL,
       access_code TEXT NOT NULL,
+      birth_year INTEGER,
+      note TEXT,
       filter_settings TEXT DEFAULT '{}',
       last_active_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  // Add new family member columns if they don't exist
+  await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS birth_year INTEGER`.catch(() => {});
+  await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS note TEXT`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS chat_messages (
