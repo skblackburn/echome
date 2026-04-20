@@ -34,6 +34,7 @@ export const personas = pgTable("personas", {
   children: text("children"),
   pronouns: text("pronouns"),
   birthPlace: text("birth_place"),
+  avatarUrl: text("avatar_url"),
   selfMode: boolean("self_mode").default(false),
   creatorName: text("creator_name"),
   creatorRelationship: text("creator_relationship"),
