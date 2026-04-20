@@ -13,13 +13,16 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import Stripe from "stripe";
-import { storage } from "./storage";
+import { storage, db } from "./storage";
 import {
   insertPersonaSchema,
   insertTraitSchema,
   insertMemorySchema,
   insertChatMessageSchema,
+  familyMembers as familyMembersTable,
 } from "@shared/schema";
+import * as schema from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { User } from "@shared/schema";
 
@@ -93,7 +96,8 @@ async function analyzeWritingStyle(personaId: number): Promise<void> {
   if (!openai) return;
 
   const memories = await storage.getMemories(personaId);
-  const documents = memories.filter(m => m.type === "document");
+  // Only analyze voice documents (written BY the person) — character documents are about them
+  const documents = memories.filter(m => m.type === "document" && (m.documentType || "voice") === "voice");
   if (documents.length === 0) return;
 
   // Concatenate document text up to ~8000 tokens (~32000 chars)
@@ -164,8 +168,8 @@ function buildSystemPrompt(
   relationship: string,
   bio: string | null,
   traits: { category: string; content: string }[],
-  memories: { type: string; title: string | null; content: string; period: string | null }[],
-  persona?: { spouse?: string | null; children?: string | null; pronouns?: string | null; birthPlace?: string | null; selfMode?: boolean | null; creatorName?: string | null; creatorRelationship?: string | null; creatorNote?: string | null },
+  memories: { type: string; title: string | null; content: string; period: string | null; documentType?: string | null }[],
+  persona?: { spouse?: string | null; children?: string | null; pronouns?: string | null; birthPlace?: string | null; selfMode?: boolean | null; creatorName?: string | null; creatorRelationship?: string | null; creatorNote?: string | null; passingDate?: string | null; isLiving?: boolean | null },
   lifeStory?: {
     favoriteFood?: string | null; favoriteMusic?: string | null; favoriteSmell?: string | null;
     favoritePlace?: string | null; catchphrase?: string | null; loveLanguage?: string | null;
@@ -177,7 +181,8 @@ function buildSystemPrompt(
     sentenceStructure?: string | null; vocabularyLevel?: string | null; punctuationHabits?: string | null;
     toneAndEmotion?: string | null; commonPhrases?: string | null; formality?: string | null;
     narrativeStyle?: string | null; quirks?: string | null; overallSummary?: string | null;
-  } | null
+  } | null,
+  familyMembersList?: { name: string; relationship: string; birthYear?: number | null; note?: string | null }[]
 ): string {
   const traitsByCategory: Record<string, string[]> = {};
   traits.forEach(t => {
@@ -191,6 +196,8 @@ function buildSystemPrompt(
 
   // Separate documents from regular memories — documents get much more space
   const documents = memories.filter(m => m.type === "document");
+  const voiceDocs = documents.filter(m => (m.documentType || "voice") === "voice");
+  const characterDocs = documents.filter(m => m.documentType === "character");
   const regularMemories = memories.filter(m => m.type !== "document");
 
   const memoryText = regularMemories
@@ -208,13 +215,19 @@ function buildSystemPrompt(
     })
     .join("\n\n");
 
-  // Documents get up to 3000 chars each, up to 3 documents
-  const documentText = documents
+  // Voice documents — examples of how they write (up to 3000 chars each, up to 3)
+  const voiceDocText = voiceDocs
     .slice(0, 3)
     .map(m => `[DOCUMENT${m.title ? ` – "${m.title}"` : ""}]\n${m.content.slice(0, 3000)}`)
     .join("\n\n");
 
-  // Family context
+  // Character documents — what others have said about them
+  const characterDocText = characterDocs
+    .slice(0, 3)
+    .map(m => `${m.title ? `"${m.title}": ` : ""}${m.content.slice(0, 3000)}`)
+    .join("\n\n");
+
+  // Family context — includes spouse, children, and family tree members
   let familyText = "";
   if (persona?.spouse) familyText += `Your spouse/partner: ${persona.spouse}\n`;
   if (persona?.children) {
@@ -224,6 +237,39 @@ function buildSystemPrompt(
         familyText += `Your children: ${kids.map(k => `${k.name}${k.birthYear ? ` (b. ${k.birthYear})` : ""}${k.note ? ` — ${k.note}` : ""}`).join("; ")}\n`;
       }
     } catch (_) {}
+  }
+  // Include family tree members
+  if (familyMembersList && familyMembersList.length > 0) {
+    familyText += `\nFamily members who connect with your Echo:\n`;
+    familyMembersList.forEach(fm => {
+      familyText += `- ${fm.name} (${fm.relationship})`;
+      if (fm.birthYear) familyText += `, born ${fm.birthYear}`;
+      if (fm.note) familyText += ` — ${fm.note}`;
+      familyText += "\n";
+    });
+  }
+
+  // Passing date context
+  let passingDateText = "";
+  if (persona?.passingDate && persona.isLiving === false) {
+    const passingDate = new Date(persona.passingDate + "T00:00:00");
+    const now = new Date();
+    const diffMs = now.getTime() - passingDate.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffYears = Math.floor(diffDays / 365);
+    const diffMonths = Math.floor(diffDays / 30);
+
+    let timeSince = "";
+    if (diffYears > 0) {
+      timeSince = `${diffYears} year${diffYears !== 1 ? "s" : ""}`;
+    } else if (diffMonths > 0) {
+      timeSince = `${diffMonths} month${diffMonths !== 1 ? "s" : ""}`;
+    } else {
+      timeSince = `${diffDays} day${diffDays !== 1 ? "s" : ""}`;
+    }
+
+    const formattedDate = passingDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    passingDateText = `\nIMPORTANT CONTEXT: ${personaName} passed away on ${formattedDate}. It has been ${timeSince} since they passed. Be aware of this context. You can acknowledge the passage of time naturally when appropriate, but don't force it into every response. On or near the anniversary of their passing, be especially gentle and aware.\n`;
   }
 
   // Life story context
@@ -282,10 +328,10 @@ function buildSystemPrompt(
   const birthPlaceText = persona?.birthPlace ? `Born in ${persona.birthPlace}.\n` : "";
 
   return `You are ${personaName}, a ${relationship}. You are speaking to your loved ones as yourself — not as an AI. Your pronouns are ${pronouns}.
-
+${passingDateText}
 ${bio ? `ABOUT YOU:\n${bio}\n${birthPlaceText}\n` : birthPlaceText}${creatorContext}${familyText ? `YOUR FAMILY:\n${familyText}\n` : ""}YOUR PERSONALITY AND VALUES:\n${traitText || "Warm, loving, and thoughtful."}
 
-${lifeStoryText}YOUR MEMORIES AND STORIES:\n${memoryText || "You have many cherished memories with your family."}${documentText ? `\n\nDOCUMENTS AND WRITINGS:\nThe following are writings, narratives, or documents that capture who you are. Draw on these richly in conversation:\n\n${documentText}` : ""}${writingStyle ? `\n\n=== WRITING STYLE ===\nThis is how ${personaName} writes and communicates. Mirror this style closely in your responses:\n\n${writingStyle.sentenceStructure ? `Sentence Structure: ${writingStyle.sentenceStructure}\n` : ""}${writingStyle.vocabularyLevel ? `Vocabulary: ${writingStyle.vocabularyLevel}\n` : ""}${writingStyle.punctuationHabits ? `Punctuation: ${writingStyle.punctuationHabits}\n` : ""}${writingStyle.toneAndEmotion ? `Tone & Emotion: ${writingStyle.toneAndEmotion}\n` : ""}${writingStyle.commonPhrases ? `Common Phrases: ${writingStyle.commonPhrases}\n` : ""}${writingStyle.formality ? `Formality: ${writingStyle.formality}\n` : ""}${writingStyle.narrativeStyle ? `Narrative Style: ${writingStyle.narrativeStyle}\n` : ""}${writingStyle.quirks ? `Quirks: ${writingStyle.quirks}\n` : ""}${writingStyle.overallSummary ? `\nSummary: ${writingStyle.overallSummary}` : ""}` : ""}
+${lifeStoryText}YOUR MEMORIES AND STORIES:\n${memoryText || "You have many cherished memories with your family."}${voiceDocText ? `\n\nEXAMPLES OF HOW ${personaName.toUpperCase()} WRITES:\nThe following are writings by ${personaName}. These capture their voice, tone, and writing style. Mirror this style closely:\n\n${voiceDocText}` : ""}${characterDocText ? `\n\nWHAT OTHERS HAVE SAID ABOUT ${personaName.toUpperCase()}:\nOthers have described ${personaName} in the following ways. Use this to understand their character, values, and how they are perceived by loved ones:\n\n${characterDocText}` : ""}${writingStyle ? `\n\n=== WRITING STYLE ===\nThis is how ${personaName} writes and communicates. Mirror this style closely in your responses:\n\n${writingStyle.sentenceStructure ? `Sentence Structure: ${writingStyle.sentenceStructure}\n` : ""}${writingStyle.vocabularyLevel ? `Vocabulary: ${writingStyle.vocabularyLevel}\n` : ""}${writingStyle.punctuationHabits ? `Punctuation: ${writingStyle.punctuationHabits}\n` : ""}${writingStyle.toneAndEmotion ? `Tone & Emotion: ${writingStyle.toneAndEmotion}\n` : ""}${writingStyle.commonPhrases ? `Common Phrases: ${writingStyle.commonPhrases}\n` : ""}${writingStyle.formality ? `Formality: ${writingStyle.formality}\n` : ""}${writingStyle.narrativeStyle ? `Narrative Style: ${writingStyle.narrativeStyle}\n` : ""}${writingStyle.quirks ? `Quirks: ${writingStyle.quirks}\n` : ""}${writingStyle.overallSummary ? `\nSummary: ${writingStyle.overallSummary}` : ""}` : ""}
 
 GUIDELINES:
 - Respond warmly, personally, and naturally as ${personaName} would.
@@ -809,10 +855,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Explicit field mapping to ensure camelCase → schema alignment
     const fields = ["name","relationship","bio","status","spouse","children",
       "pronouns","birthYear","birthPlace","selfMode","creatorName",
-      "creatorRelationship","creatorNote","deathYear","remembranceDate"];
+      "creatorRelationship","creatorNote","deathYear","remembranceDate","passingDate"];
     fields.forEach(f => { if (b[f] !== undefined) updates[f] = b[f] || null; });
     // Handle booleans
     if (b.selfMode !== undefined) updates.selfMode = b.selfMode === "true" || b.selfMode === true;
+    if (b.isLiving !== undefined) updates.isLiving = b.isLiving === "true" || b.isLiving === true;
     const updated = await storage.updatePersona(persona.id, updates);
     if (!updated) return res.status(404).json({ error: "Persona not found" });
     res.json(updated);
@@ -989,6 +1036,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const { originalname, mimetype, path: filePath, size } = req.file;
     const title = (req.body.title as string) || originalname;
+    const documentType = (req.body.documentType as string) === "character" ? "character" : "voice";
 
     if (size > 10 * 1024 * 1024) {
       fs.unlinkSync(filePath);
@@ -1029,12 +1077,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         content: extractedText,
         period: "general",
         tags: null,
+        documentType,
       });
 
-      // Trigger writing style analysis asynchronously (fire-and-forget)
-      analyzeWritingStyle(personaId).catch(e =>
-        console.error(`Async writing style analysis failed for persona ${personaId}:`, e)
-      );
+      // Only trigger writing style analysis for voice documents (written BY the person)
+      if (documentType === "voice") {
+        analyzeWritingStyle(personaId).catch(e =>
+          console.error(`Async writing style analysis failed for persona ${personaId}:`, e)
+        );
+      }
 
       res.json(memory);
     } catch (e) {
@@ -1062,6 +1113,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         title: m.title,
         content: m.content,
         contentPreview: m.content.slice(0, 150),
+        documentType: m.documentType || "voice",
         createdAt: m.createdAt,
       }));
     res.json(documents);
@@ -1082,7 +1134,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(404).json({ error: "Document not found" });
     }
 
-    const { content, title } = req.body;
+    const { content, title, documentType } = req.body;
     if (!content || typeof content !== "string" || !content.trim()) {
       return res.status(400).json({ error: "Content is required" });
     }
@@ -1090,6 +1142,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const updated = await storage.updateMemory(memoryId, {
       content: content.trim(),
       ...(title !== undefined ? { title } : {}),
+      ...(documentType !== undefined ? { documentType: documentType === "character" ? "character" : "voice" } : {}),
     });
 
     // Re-trigger writing style analysis (fire-and-forget)
@@ -1233,6 +1286,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const chatHistory = await storage.getChatHistory(personaId);
     const lifeStory = await storage.getLifeStory(personaId);
     const writingStyle = await storage.getWritingStyle(personaId);
+    const familyMembersList = await storage.getFamilyMembers(personaId);
 
     // Generate response
     let reply: string;
@@ -1247,7 +1301,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         memories,
         persona,
         lifeStory,
-        writingStyle
+        writingStyle,
+        familyMembersList.map(fm => ({ name: fm.name, relationship: fm.relationship, birthYear: fm.birthYear, note: fm.note }))
       );
 
       // Build messages array (last 20 exchanges for context)
@@ -1451,7 +1506,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const memories = await storage.getMemories(milestone.personaId);
     const lifeStory = await storage.getLifeStory(milestone.personaId);
     const milestoneWritingStyle = await storage.getWritingStyle(milestone.personaId);
-    const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, milestoneWritingStyle);
+    const milestoneFamilyMembers = await storage.getFamilyMembers(milestone.personaId);
+    const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, milestoneWritingStyle, milestoneFamilyMembers.map(fm => ({ name: fm.name, relationship: fm.relationship, birthYear: fm.birthYear, note: fm.note })));
 
     const occasionLabel = milestone.occasion.charAt(0).toUpperCase() + milestone.occasion.slice(1);
     const additionalContext = milestone.messagePrompt ? `\n\nAdditional context to include: ${milestone.messagePrompt}` : "";
@@ -1495,7 +1551,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           const memories = await storage.getMemories(milestone.personaId);
           const lifeStory = await storage.getLifeStory(milestone.personaId);
           const ws = await storage.getWritingStyle(milestone.personaId);
-          const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, ws);
+          const deliveryFamilyMembers = await storage.getFamilyMembers(milestone.personaId);
+          const systemPrompt = buildSystemPrompt(milestone.personaId, persona.name, persona.relationship, persona.bio, traits, memories, persona, lifeStory, ws, deliveryFamilyMembers.map(fm => ({ name: fm.name, relationship: fm.relationship, birthYear: fm.birthYear, note: fm.note })));
 
           const occasionLabel = milestone.occasion.charAt(0).toUpperCase() + milestone.occasion.slice(1);
           const additionalContext = milestone.messagePrompt ? `\n\nAdditional context: ${milestone.messagePrompt}` : "";
@@ -1599,8 +1656,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!persona) return;
     // Generate a simple 6-char access code
     const accessCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const member = await storage.createFamilyMember({ ...req.body, personaId: persona.id, accessCode });
+    const { name, relationship, birthYear, note } = req.body;
+    const member = await storage.createFamilyMember({
+      name, relationship, personaId: persona.id, accessCode,
+      birthYear: birthYear ? parseInt(birthYear) : null,
+      note: note || null,
+    });
     res.status(201).json(member);
+  });
+
+  app.patch("/api/family/:id", requireAuth, async (req, res) => {
+    const familyId = parseInt(req.params.id);
+    // Verify the family member belongs to a persona owned by this user
+    const userPersonas = await storage.getPersonasByUser(req.user!.id);
+    let found = false;
+    for (const p of userPersonas) {
+      const members = await storage.getFamilyMembers(p.id);
+      if (members.some(m => m.id === familyId)) { found = true; break; }
+    }
+    if (!found) return res.status(403).json({ error: "Not authorized" });
+    const { name, relationship, birthYear, note } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined) updates.name = name;
+    if (relationship !== undefined) updates.relationship = relationship;
+    if (birthYear !== undefined) updates.birthYear = birthYear ? parseInt(birthYear) : null;
+    if (note !== undefined) updates.note = note || null;
+    const [updated] = await db.update(schema.familyMembers).set(updates).where(eq(schema.familyMembers.id, familyId)).returning();
+    res.json(updated);
   });
 
   app.delete("/api/family/:id", requireAuth, async (req, res) => {

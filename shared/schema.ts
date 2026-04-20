@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, serial, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -40,6 +40,8 @@ export const personas = pgTable("personas", {
   creatorNote: text("creator_note"),
   deathYear: text("death_year"),
   remembranceDate: text("remembrance_date"),
+  passingDate: text("passing_date"),
+  isLiving: boolean("is_living").default(true),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -68,6 +70,7 @@ export const memories = pgTable("memories", {
   content: text("content").notNull(),
   period: text("period"),
   tags: text("tags"),
+  documentType: text("document_type").default("voice"),
   contributedBy: text("contributed_by"),
   contributorCode: text("contributor_code"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -146,6 +149,8 @@ export const familyMembers = pgTable("family_members", {
   name: text("name").notNull(),
   relationship: text("relationship").notNull(),
   accessCode: text("access_code").notNull(),
+  birthYear: integer("birth_year"),
+  note: text("note"),
   filterSettings: text("filter_settings").default("{}"),
   lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow(),

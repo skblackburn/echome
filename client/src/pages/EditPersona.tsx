@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Camera, Trash2 } from "lucide-react";
+import { Save, Camera, Trash2, Heart } from "lucide-react";
 import type { Persona } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,8 @@ export default function EditPersona() {
   const [bio, setBio] = useState("");
   const [deathYear, setDeathYear] = useState("");
   const [remembranceDate, setRemembranceDate] = useState("");
+  const [isLiving, setIsLiving] = useState(true);
+  const [passingDate, setPassingDate] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
@@ -57,6 +59,8 @@ export default function EditPersona() {
       setBio(persona.bio || "");
       setDeathYear((persona as any).deathYear || "");
       setRemembranceDate((persona as any).remembranceDate || "");
+      setIsLiving((persona as any).isLiving !== false);
+      setPassingDate((persona as any).passingDate || "");
     }
   }, [persona]);
 
@@ -79,6 +83,9 @@ export default function EditPersona() {
       if (bio) form.append("bio", bio);
       if (deathYear) form.append("deathYear", deathYear);
       if (remembranceDate) form.append("remembranceDate", remembranceDate);
+      form.append("isLiving", String(isLiving));
+      if (!isLiving && passingDate) form.append("passingDate", passingDate);
+      if (isLiving) form.append("passingDate", "");
       if (photoFile) form.append("photo", photoFile);
 
       const res = await fetch(`${API_BASE}/api/personas/${personaId}`, {
@@ -176,7 +183,7 @@ export default function EditPersona() {
         <div className="space-y-1.5">
           <Label>Relationship</Label>
           <Select value={relationship} onValueChange={setRelationship}>
-            <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
             <SelectContent>
               {RELATIONSHIPS.map(r => <SelectItem key={r} value={r} className="capitalize">{r}</SelectItem>)}
             </SelectContent>
@@ -191,11 +198,62 @@ export default function EditPersona() {
           </div>
           <div className="space-y-1.5">
             <Label>Place of birth</Label>
-            <Input value={birthPlace} onChange={e => setBirthPlace(e.target.value)} placeholder="e.g., Hana, Hawaiʻi" />
+            <Input value={birthPlace} onChange={e => setBirthPlace(e.target.value)} placeholder="e.g., Hana, Hawaii" />
           </div>
         </div>
 
-        {/* Death year + remembrance date */}
+        {/* Passing date — sensitive section */}
+        <div className="rounded-xl border border-rose-200/60 dark:border-rose-900/30 p-5 space-y-4 bg-rose-50/30 dark:bg-rose-950/10">
+          <div className="flex items-center gap-2">
+            <Heart className="h-4 w-4 text-rose-400" />
+            <p className="text-sm font-medium text-foreground">Is {firstName} still with us?</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsLiving(true)}
+              className={cn(
+                "px-4 py-2 rounded-full border text-sm font-medium transition-all",
+                isLiving
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40"
+              )}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsLiving(false)}
+              className={cn(
+                "px-4 py-2 rounded-full border text-sm font-medium transition-all",
+                !isLiving
+                  ? "border-rose-400 bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800"
+                  : "border-border text-muted-foreground hover:border-rose-300"
+              )}
+            >
+              No longer with us
+            </button>
+          </div>
+
+          {!isLiving && (
+            <div className="space-y-3 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-sm text-muted-foreground">When did {firstName} pass away?</Label>
+                <Input
+                  type="date"
+                  value={passingDate}
+                  onChange={e => setPassingDate(e.target.value)}
+                  className="w-48"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This helps the Echo acknowledge the passage of time naturally in conversations.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Memorial dates (legacy fields) */}
         <div className="rounded-xl border border-border p-4 space-y-4 bg-muted/20">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Memorial dates</p>
           <div className="grid grid-cols-2 gap-3">
@@ -222,7 +280,7 @@ export default function EditPersona() {
         {/* Save */}
         <Button className="w-full gap-2" disabled={!name.trim() || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
           <Save className="h-4 w-4" />
-          {saveMutation.isPending ? "Saving…" : "Save changes"}
+          {saveMutation.isPending ? "Saving..." : "Save changes"}
         </Button>
 
         {/* Danger zone */}
@@ -232,7 +290,7 @@ export default function EditPersona() {
           <Button variant="destructive" size="sm" className="gap-2" disabled={deleteMutation.isPending}
             onClick={() => { if (confirm(`Delete ${firstName}'s Echo permanently?`)) deleteMutation.mutate(); }}>
             <Trash2 className="h-4 w-4" />
-            {deleteMutation.isPending ? "Deleting…" : `Delete ${firstName}'s Echo`}
+            {deleteMutation.isPending ? "Deleting..." : `Delete ${firstName}'s Echo`}
           </Button>
         </div>
       </div>
