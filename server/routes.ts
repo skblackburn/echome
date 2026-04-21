@@ -37,11 +37,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const APP_URL = process.env.APP_URL || "https://echome-production-a33e.up.railway.app";
 
 // Plan limits configuration
-const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null; heirs: number }> = {
-  free: { echoes: 1, messages: 20, milestones: 1, heirs: 1 },
-  personal: { echoes: 1, messages: null, milestones: 5, heirs: 3 },
-  family: { echoes: 5, messages: null, milestones: 15, heirs: 5 },
-  legacy: { echoes: 10, messages: null, milestones: null, heirs: 10 },
+const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null; heirs: number; reflections: number | null }> = {
+  free: { echoes: 1, messages: 20, milestones: 1, heirs: 1, reflections: 3 },
+  personal: { echoes: 1, messages: null, milestones: 5, heirs: 3, reflections: null },
+  family: { echoes: 5, messages: null, milestones: 15, heirs: 5, reflections: null },
+  legacy: { echoes: 10, messages: null, milestones: null, heirs: 10, reflections: null },
 };
 
 // Map Stripe price IDs to plan info
@@ -989,6 +989,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             createdAt: f.createdAt,
           })), null, 2), { name: `${echoDir}/family-members.json` });
         }
+      }
+
+      // Journal entries
+      const journalEntries = await storage.getJournalEntriesByUser(userId, 100000, 0);
+      if (journalEntries.length > 0) {
+        archive.append(JSON.stringify(journalEntries.map(j => ({
+          title: j.title,
+          content: j.content,
+          entryDate: j.entryDate,
+          mood: j.mood,
+          includedInEcho: j.includedInEcho,
+          reflectionCount: j.reflectionCount,
+          aiReflections: j.aiReflections,
+          createdAt: j.createdAt,
+        })), null, 2), { name: `${folderName}/journal-entries.json` });
       }
 
       await archive.finalize();
@@ -2622,6 +2637,311 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ voices: data.voices || [] });
     } catch (e) {
       res.json({ voices: [] });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // JOURNAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Create journal entry
+  app.post("/api/journal", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
+    const { title, content, entryDate, mood, includedInEcho, echoPersonaId } = req.body;
+
+    if (!content?.trim()) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const entry = await storage.createJournalEntry({
+      userId,
+      title: title || null,
+      content: content.trim(),
+      entryDate: entryDate || today,
+      mood: mood || null,
+      includedInEcho: !!includedInEcho,
+      echoPersonaId: echoPersonaId || null,
+      linkedMemoryId: null,
+      reflectionCount: 0,
+      aiReflections: null,
+    });
+
+    // If included in Echo, create a linked memory
+    if (includedInEcho && echoPersonaId) {
+      const persona = await storage.getPersona(echoPersonaId);
+      if (persona && persona.userId === userId) {
+        const memory = await storage.createMemory({
+          personaId: echoPersonaId,
+          type: "document",
+          title: title || `Journal: ${entry.entryDate}`,
+          content: content.trim(),
+          period: null,
+          tags: null,
+          documentType: "voice",
+          contributedBy: null,
+          contributorCode: null,
+          contributorUserId: userId,
+          contributorRelationship: "self",
+          perspectiveType: "self",
+        });
+        await storage.updateJournalEntry(entry.id, { linkedMemoryId: memory.id });
+        entry.linkedMemoryId = memory.id;
+      }
+    }
+
+    res.json(entry);
+  });
+
+  // List journal entries (paginated)
+  app.get("/api/journal", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const entries = await storage.getJournalEntriesByUser(userId, limit, offset);
+    const total = await storage.getJournalEntryCountByUser(userId);
+
+    res.json({
+      entries,
+      pagination: { limit, offset, total, hasMore: offset + limit < total },
+    });
+  });
+
+  // Journal stats
+  app.get("/api/journal/stats", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
+    const allEntries = await storage.getJournalEntriesByUser(userId, 10000, 0);
+    const total = allEntries.length;
+    const reflectionsThisMonth = await storage.getMonthlyReflectionCount(userId);
+
+    // Calculate streak (consecutive days with entries, ending today or yesterday)
+    let streak = 0;
+    if (total > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dates = new Set(allEntries.map(e => e.entryDate));
+      const todayStr = today.toISOString().split("T")[0];
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+      // Start from today or yesterday
+      let checkDate = new Date(today);
+      if (!dates.has(todayStr) && dates.has(yesterdayStr)) {
+        checkDate = new Date(yesterday);
+      } else if (!dates.has(todayStr)) {
+        streak = 0;
+      }
+
+      if (dates.has(checkDate.toISOString().split("T")[0])) {
+        while (dates.has(checkDate.toISOString().split("T")[0])) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+      }
+    }
+
+    // Entries this week
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    const weekStr = startOfWeek.toISOString().split("T")[0];
+    const thisWeek = allEntries.filter(e => e.entryDate >= weekStr).length;
+
+    // Entries this month
+    const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const thisMonth = allEntries.filter(e => e.entryDate.startsWith(monthStr)).length;
+
+    res.json({ total, streak, reflectionsThisMonth, thisWeek, thisMonth });
+  });
+
+  // Get user's owned personas (for Echo selection in journal)
+  app.get("/api/journal/personas", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
+    const personas = await storage.getPersonasByUser(userId);
+    const active = personas.filter(p => p.status === "active");
+    res.json(active.map(p => ({ id: p.id, name: p.name, selfMode: p.selfMode })));
+  });
+
+  // Get single journal entry
+  app.get("/api/journal/:id", requireAuth, async (req, res) => {
+    const entryId = parseInt(req.params.id);
+    if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    const entry = await storage.getJournalEntryById(entryId);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    res.json(entry);
+  });
+
+  // Update journal entry
+  app.put("/api/journal/:id", requireAuth, async (req, res) => {
+    const entryId = parseInt(req.params.id);
+    if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    const entry = await storage.getJournalEntryById(entryId);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const userId = req.user!.id;
+    const { title, content, entryDate, mood, includedInEcho, echoPersonaId } = req.body;
+
+    const updateData: Partial<import("@shared/schema").InsertJournalEntry> = {};
+    if (title !== undefined) updateData.title = title || null;
+    if (content !== undefined) updateData.content = content.trim();
+    if (entryDate !== undefined) updateData.entryDate = entryDate;
+    if (mood !== undefined) updateData.mood = mood || null;
+    if (includedInEcho !== undefined) updateData.includedInEcho = !!includedInEcho;
+    if (echoPersonaId !== undefined) updateData.echoPersonaId = echoPersonaId || null;
+
+    // Handle Echo inclusion changes
+    const wasIncluded = entry.includedInEcho;
+    const willBeIncluded = includedInEcho !== undefined ? !!includedInEcho : wasIncluded;
+    const newPersonaId = echoPersonaId !== undefined ? echoPersonaId : entry.echoPersonaId;
+
+    // Removed from Echo
+    if (wasIncluded && !willBeIncluded && entry.linkedMemoryId) {
+      await storage.deleteMemory(entry.linkedMemoryId);
+      updateData.linkedMemoryId = null;
+    }
+    // Added to Echo (new)
+    else if (!wasIncluded && willBeIncluded && newPersonaId) {
+      const persona = await storage.getPersona(newPersonaId);
+      if (persona && persona.userId === userId) {
+        const finalContent = content !== undefined ? content.trim() : entry.content;
+        const finalTitle = title !== undefined ? title : entry.title;
+        const memory = await storage.createMemory({
+          personaId: newPersonaId,
+          type: "document",
+          title: finalTitle || `Journal: ${entry.entryDate}`,
+          content: finalContent,
+          period: null,
+          tags: null,
+          documentType: "voice",
+          contributedBy: null,
+          contributorCode: null,
+          contributorUserId: userId,
+          contributorRelationship: "self",
+          perspectiveType: "self",
+        });
+        updateData.linkedMemoryId = memory.id;
+      }
+    }
+    // Still included — update the linked memory content
+    else if (wasIncluded && willBeIncluded && entry.linkedMemoryId) {
+      const memUpdate: Partial<import("@shared/schema").InsertMemory> = {};
+      if (content !== undefined) memUpdate.content = content.trim();
+      if (title !== undefined) memUpdate.title = title || `Journal: ${entry.entryDate}`;
+      if (Object.keys(memUpdate).length > 0) {
+        await storage.updateMemory(entry.linkedMemoryId, memUpdate);
+      }
+    }
+
+    const updated = await storage.updateJournalEntry(entryId, updateData);
+    res.json(updated);
+  });
+
+  // Delete journal entry
+  app.delete("/api/journal/:id", requireAuth, async (req, res) => {
+    const entryId = parseInt(req.params.id);
+    if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    const entry = await storage.getJournalEntryById(entryId);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    // Remove linked memory from Echo if exists
+    if (entry.linkedMemoryId) {
+      await storage.deleteMemory(entry.linkedMemoryId);
+    }
+
+    await storage.deleteJournalEntry(entryId);
+    res.json({ success: true });
+  });
+
+  // AI Reflection on journal entry
+  app.post("/api/journal/:id/reflect", requireAuth, async (req, res) => {
+    const entryId = parseInt(req.params.id);
+    if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    const entry = await storage.getJournalEntryById(entryId);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const userId = req.user!.id;
+    const user = await storage.getUserById(userId);
+    const plan = user?.plan || "free";
+
+    // Check tier limits for free users
+    if (plan === "free") {
+      const monthlyReflections = await storage.getMonthlyReflectionCount(userId);
+      if (monthlyReflections >= 3) {
+        return res.status(403).json({
+          error: "You've used all 3 AI reflections this month. Upgrade for unlimited reflections.",
+          code: "REFLECTION_LIMIT",
+          used: monthlyReflections,
+          limit: 3,
+          plan,
+        });
+      }
+    }
+
+    if (!openai) {
+      // Demo fallback
+      const demoQuestions = [
+        "What would make tomorrow feel different from today?",
+        "What surprised you most about how you felt?",
+        "If you could tell someone about this moment, who would it be and why?",
+        "What part of this are you still turning over in your mind?",
+        "What would you want to remember about today, a year from now?",
+      ];
+      const question = demoQuestions[Math.floor(Math.random() * demoQuestions.length)];
+
+      // Save reflection
+      const reflections = entry.aiReflections ? JSON.parse(entry.aiReflections) : [];
+      reflections.push({ question, timestamp: new Date().toISOString() });
+      await storage.updateJournalEntry(entryId, {
+        reflectionCount: (entry.reflectionCount || 0) + 1,
+        aiReflections: JSON.stringify(reflections),
+      });
+
+      return res.json({ question });
+    }
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: "You are a gentle, thoughtful companion helping someone reflect on their journal entry. Ask ONE meaningful follow-up question that invites deeper introspection. Be warm, never clinical. Don't give advice. Don't be too heavy. Just help them think more deeply. Keep it to 1-2 sentences.",
+          },
+          {
+            role: "user",
+            content: `Here is my journal entry:\n\n${entry.content}`,
+          },
+        ],
+        max_tokens: 150,
+        temperature: 0.8,
+      });
+
+      const question = completion.choices[0]?.message?.content?.trim() || "What part of this feels most important to you right now?";
+
+      // Save reflection
+      const reflections = entry.aiReflections ? JSON.parse(entry.aiReflections) : [];
+      reflections.push({ question, timestamp: new Date().toISOString() });
+      await storage.updateJournalEntry(entryId, {
+        reflectionCount: (entry.reflectionCount || 0) + 1,
+        aiReflections: JSON.stringify(reflections),
+      });
+
+      res.json({ question });
+    } catch (err) {
+      console.error("AI reflection error:", err);
+      res.status(500).json({ error: "Failed to generate reflection" });
     }
   });
 

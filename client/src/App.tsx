@@ -20,6 +20,9 @@ import CreateMilestone from "@/pages/CreateMilestone";
 import MilestoneDetail from "@/pages/MilestoneDetail";
 import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
+import JournalHome from "@/pages/JournalHome";
+import JournalEditor from "@/pages/JournalEditor";
+import JournalDetail from "@/pages/JournalDetail";
 import DocumentLibrary from "@/pages/DocumentLibrary";
 import QuestionsIntake from "@/pages/QuestionsIntake";
 import UploadGuidance from "@/pages/UploadGuidance";
@@ -79,6 +82,10 @@ function AppRoutes() {
         {/* Protected routes */}
         <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
         <Route path="/create">{() => <ProtectedRoute component={CreatePersona} />}</Route>
+        <Route path="/journal">{() => <ProtectedRoute component={JournalHome} />}</Route>
+        <Route path="/journal/new">{() => <ProtectedRoute component={JournalEditor} />}</Route>
+        <Route path="/journal/:id">{() => <ProtectedRoute component={JournalDetail} />}</Route>
+        <Route path="/journal/:id/edit">{() => <ProtectedRoute component={JournalEditor} />}</Route>
         <Route path="/persona/:id">{() => <ProtectedRoute component={PersonaDashboard} />}</Route>
         <Route path="/persona/:id/questions">{() => <ProtectedRoute component={QuestionsIntake} />}</Route>
         <Route path="/persona/:id/memories">{() => <ProtectedRoute component={MemoryIntake} />}</Route>

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { EchoMeWordmark } from "./EchoMeLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon, LogOut, User, CreditCard, Settings, HelpCircle, Shield } from "lucide-react";
+import { ArrowLeft, Sun, Moon, LogOut, User, CreditCard, Settings, HelpCircle, Shield, BookOpen } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
@@ -52,6 +52,14 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
           </div>
           <div className="flex items-center gap-1">
             {actions}
+            {user && (
+              <Link href="/journal">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Journal">
+                  <BookOpen className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
             <Link href="/faq">
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 title="FAQ">
