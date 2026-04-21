@@ -12,6 +12,8 @@ import type {
   Milestone, InsertMilestone,
   FamilyMember, InsertFamilyMember,
   WritingStyle, InsertWritingStyle,
+  EchoHeir, InsertEchoHeir,
+  EchoTransfer, InsertEchoTransfer,
   User,
 } from "@shared/schema";
 
@@ -273,6 +275,39 @@ export async function initDb() {
   await client`ALTER TABLE writing_styles ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
   await client`ALTER TABLE writing_styles ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
+  // ── Phase 2: Echo Heirs & Transfers ──────────────────────────────────────
+  await client`
+    CREATE TABLE IF NOT EXISTS echo_heirs (
+      id SERIAL PRIMARY KEY,
+      persona_id INTEGER NOT NULL,
+      creator_user_id INTEGER NOT NULL,
+      heir_email TEXT NOT NULL,
+      heir_user_id INTEGER,
+      heir_name TEXT,
+      heir_relationship TEXT,
+      access_level TEXT NOT NULL DEFAULT 'full',
+      status TEXT NOT NULL DEFAULT 'pending',
+      claim_token TEXT NOT NULL UNIQUE,
+      claimed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+  await client`
+    CREATE TABLE IF NOT EXISTS echo_transfers (
+      id SERIAL PRIMARY KEY,
+      persona_id INTEGER NOT NULL,
+      transfer_trigger TEXT NOT NULL,
+      scheduled_date TEXT,
+      executed_at TIMESTAMP,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS is_shared BOOLEAN DEFAULT FALSE`.catch(() => {});
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS original_creator_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS parent_persona_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS heir_user_id INTEGER`.catch(() => {});
+
   console.log("Database tables ready");
 }
 
@@ -339,6 +374,27 @@ export interface IStorage {
   // Writing Styles
   getWritingStyle(personaId: number): Promise<WritingStyle | undefined>;
   upsertWritingStyle(personaId: number, data: Partial<InsertWritingStyle>): Promise<WritingStyle>;
+
+  // Echo Heirs
+  getHeirsByPersona(personaId: number): Promise<EchoHeir[]>;
+  getHeirByToken(claimToken: string): Promise<EchoHeir | undefined>;
+  getHeirById(id: number): Promise<EchoHeir | undefined>;
+  getHeirsByUserId(userId: number): Promise<EchoHeir[]>;
+  createHeir(data: InsertEchoHeir): Promise<EchoHeir>;
+  updateHeir(id: number, data: Partial<EchoHeir>): Promise<EchoHeir | undefined>;
+  deleteHeir(id: number): Promise<void>;
+  getHeirCountByPersona(personaId: number): Promise<number>;
+
+  // Echo Transfers
+  getTransfersByPersona(personaId: number): Promise<EchoTransfer[]>;
+  getTransferById(id: number): Promise<EchoTransfer | undefined>;
+  createTransfer(data: InsertEchoTransfer): Promise<EchoTransfer>;
+  updateTransfer(id: number, data: Partial<EchoTransfer>): Promise<EchoTransfer | undefined>;
+  getPendingScheduledTransfers(today: string): Promise<EchoTransfer[]>;
+  getPendingOnPassingTransfers(): Promise<EchoTransfer[]>;
+
+  // Chat with heir support
+  getChatHistoryForHeir(personaId: number, heirUserId: number): Promise<ChatMessage[]>;
 
   // Persona management
   deleteAllPersonaData(personaId: number): Promise<void>;
@@ -554,6 +610,65 @@ export class PgStorage implements IStorage {
     }
   }
 
+  // ── Echo Heirs ───────────────────────────────────────────────────────────
+  async getHeirsByPersona(personaId: number): Promise<EchoHeir[]> {
+    return db.select().from(schema.echoHeirs).where(eq(schema.echoHeirs.personaId, personaId)).orderBy(desc(schema.echoHeirs.createdAt));
+  }
+  async getHeirByToken(claimToken: string): Promise<EchoHeir | undefined> {
+    return db.select().from(schema.echoHeirs).where(eq(schema.echoHeirs.claimToken, claimToken)).then(r => r[0]);
+  }
+  async getHeirById(id: number): Promise<EchoHeir | undefined> {
+    return db.select().from(schema.echoHeirs).where(eq(schema.echoHeirs.id, id)).then(r => r[0]);
+  }
+  async getHeirsByUserId(userId: number): Promise<EchoHeir[]> {
+    return db.select().from(schema.echoHeirs).where(eq(schema.echoHeirs.heirUserId, userId));
+  }
+  async createHeir(data: InsertEchoHeir): Promise<EchoHeir> {
+    const [h] = await db.insert(schema.echoHeirs).values(data).returning();
+    return h;
+  }
+  async updateHeir(id: number, data: Partial<EchoHeir>): Promise<EchoHeir | undefined> {
+    const [h] = await db.update(schema.echoHeirs).set(data).where(eq(schema.echoHeirs.id, id)).returning();
+    return h;
+  }
+  async deleteHeir(id: number): Promise<void> {
+    await db.delete(schema.echoHeirs).where(eq(schema.echoHeirs.id, id));
+  }
+  async getHeirCountByPersona(personaId: number): Promise<number> {
+    const heirs = await db.select().from(schema.echoHeirs).where(eq(schema.echoHeirs.personaId, personaId));
+    return heirs.length;
+  }
+
+  // ── Echo Transfers ──────────────────────────────────────────────────────
+  async getTransfersByPersona(personaId: number): Promise<EchoTransfer[]> {
+    return db.select().from(schema.echoTransfers).where(eq(schema.echoTransfers.personaId, personaId)).orderBy(desc(schema.echoTransfers.createdAt));
+  }
+  async getTransferById(id: number): Promise<EchoTransfer | undefined> {
+    return db.select().from(schema.echoTransfers).where(eq(schema.echoTransfers.id, id)).then(r => r[0]);
+  }
+  async createTransfer(data: InsertEchoTransfer): Promise<EchoTransfer> {
+    const [t] = await db.insert(schema.echoTransfers).values(data).returning();
+    return t;
+  }
+  async updateTransfer(id: number, data: Partial<EchoTransfer>): Promise<EchoTransfer | undefined> {
+    const [t] = await db.update(schema.echoTransfers).set(data).where(eq(schema.echoTransfers.id, id)).returning();
+    return t;
+  }
+  async getPendingScheduledTransfers(today: string): Promise<EchoTransfer[]> {
+    const all = await db.select().from(schema.echoTransfers).where(eq(schema.echoTransfers.status, "pending"));
+    return all.filter(t => t.transferTrigger === "scheduled" && t.scheduledDate && t.scheduledDate <= today);
+  }
+  async getPendingOnPassingTransfers(): Promise<EchoTransfer[]> {
+    const all = await db.select().from(schema.echoTransfers).where(eq(schema.echoTransfers.status, "pending"));
+    return all.filter(t => t.transferTrigger === "on_passing");
+  }
+
+  // ── Chat with heir support ──────────────────────────────────────────────
+  async getChatHistoryForHeir(personaId: number, heirUserId: number): Promise<ChatMessage[]> {
+    const all = await db.select().from(schema.chatMessages).where(eq(schema.chatMessages.personaId, personaId)).orderBy(schema.chatMessages.createdAt);
+    return all.filter(m => m.heirUserId === heirUserId);
+  }
+
   // ── Persona Data Purge ────────────────────────────────────────────────────
   async deleteAllPersonaData(personaId: number): Promise<void> {
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.personaId, personaId));
@@ -564,6 +679,8 @@ export class PgStorage implements IStorage {
     await db.delete(schema.milestoneMessages).where(eq(schema.milestoneMessages.personaId, personaId));
     await db.delete(schema.familyMembers).where(eq(schema.familyMembers.personaId, personaId));
     await db.delete(schema.writingStyles).where(eq(schema.writingStyles.personaId, personaId));
+    await db.delete(schema.echoHeirs).where(eq(schema.echoHeirs.personaId, personaId));
+    await db.delete(schema.echoTransfers).where(eq(schema.echoTransfers.personaId, personaId));
     await db.delete(schema.personas).where(eq(schema.personas.id, personaId));
   }
 
@@ -588,6 +705,8 @@ export class PgStorage implements IStorage {
       await db.delete(schema.milestoneMessages).where(eq(schema.milestoneMessages.personaId, pid));
       await db.delete(schema.familyMembers).where(eq(schema.familyMembers.personaId, pid));
       await db.delete(schema.writingStyles).where(eq(schema.writingStyles.personaId, pid));
+      await db.delete(schema.echoHeirs).where(eq(schema.echoHeirs.personaId, pid));
+      await db.delete(schema.echoTransfers).where(eq(schema.echoTransfers.personaId, pid));
       await db.delete(schema.personas).where(eq(schema.personas.id, pid));
     }
   }

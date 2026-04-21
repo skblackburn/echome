@@ -262,6 +262,9 @@ export default function Chat() {
   };
 
   const firstName = persona?.name?.split(" ")[0] || "Echo";
+  const isInherited = !!(persona as any)?._isInherited;
+  const heirAccess = (persona as any)?._heirAccess;
+  const isReadOnly = isInherited && heirAccess === "read_only";
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -300,14 +303,14 @@ export default function Chat() {
                   <span className="hidden sm:inline">Add memory</span>
                 </Button>
               </Link>
-            ) : (
+            ) : !isReadOnly ? (
               <Link href={`/persona/${personaId}/memories`}>
                 <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
                   <BookOpen className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Add memories</span>
                 </Button>
               </Link>
-            )}
+            ) : null}
             <Button variant="ghost" size="sm"
               className="gap-1.5 text-xs text-muted-foreground"
               onClick={() => { setShowStarters(s => !s); setStartersDismissed(false); }}
