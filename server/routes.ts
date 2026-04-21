@@ -408,6 +408,15 @@ async function canAccessPersona(userId: number, personaId: number, action: "read
   const heirRecord = heirs.find(h => h.heirUserId === userId && h.status === "claimed");
   if (!heirRecord) return { allowed: false, isOwner: false, isHeir: false };
 
+  // SECURITY: Heirs only get access AFTER a transfer has been executed.
+  // Being "claimed" just means they accepted the invitation — access requires
+  // the creator (or a scheduled trigger) to actually execute the transfer.
+  const transfers = await storage.getTransfersByPersona(personaId);
+  const hasExecutedTransfer = transfers.some(t => t.status === "executed");
+  if (!hasExecutedTransfer) {
+    return { allowed: false, isOwner: false, isHeir: true, heir: heirRecord, accessLevel: heirRecord.accessLevel || "full" };
+  }
+
   const heirAccessLevel = heirRecord.accessLevel || "full";
   if (action === "admin") {
     // Only owner can perform admin actions
@@ -1005,13 +1014,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/personas", requireAuth, async (req, res) => {
     const ownPersonas = await storage.getPersonasByUser(req.user!.id);
-    // Also fetch inherited personas (where user is a claimed heir)
+    // Also fetch inherited personas (where user is a claimed heir AND transfer has been executed)
     const heirRecords = await storage.getHeirsByUserId(req.user!.id);
     const claimedHeirs = heirRecords.filter(h => h.status === "claimed");
     const inheritedPersonas: (import("@shared/schema").Persona & { _heirAccess?: string; _isInherited?: boolean })[] = [];
     for (const heir of claimedHeirs) {
       // Skip if already owned
       if (ownPersonas.some(p => p.id === heir.personaId)) continue;
+      // SECURITY: Only show inherited echoes after the transfer has been executed
+      const transfers = await storage.getTransfersByPersona(heir.personaId);
+      if (!transfers.some(t => t.status === "executed")) continue;
       const persona = await storage.getPersona(heir.personaId);
       if (persona) {
         inheritedPersonas.push({ ...persona, _heirAccess: heir.accessLevel, _isInherited: true });
@@ -2162,21 +2174,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (heir.status === "claimed") return res.status(400).json({ error: "Already claimed" });
     if (heir.status === "declined") return res.status(400).json({ error: "This invitation was declined" });
 
-    // Link heir to authenticated user
+    // Link heir to authenticated user.
+    // SECURITY: Claiming records who accepted the invitation, but does NOT grant access.
+    // Access is only granted after a transfer is executed (manual, scheduled, or on_passing).
+    // The persona is marked isShared only when the transfer fires, not when an heir claims.
     await storage.updateHeir(heir.id, {
       heirUserId: req.user!.id,
       status: "claimed",
       claimedAt: new Date(),
     });
 
-    // Mark persona as shared if not already
     const persona = await storage.getPersona(heir.personaId);
-    if (persona && !persona.isShared) {
-      await storage.updatePersona(heir.personaId, {
-        isShared: true,
-        originalCreatorId: persona.userId,
-      } as any);
-    }
 
     // Notify creator and other heirs
     if (persona) {
