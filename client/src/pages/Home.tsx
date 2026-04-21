@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown } from "lucide-react";
+import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown, Users, GitFork } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -18,13 +18,18 @@ interface SubscriptionInfo {
   totalMessagesSent: number;
 }
 
-function PersonaCard({ persona }: { persona: Persona }) {
+function PersonaCard({ persona }: { persona: Persona & { _isInherited?: boolean; _heirAccess?: string; parentPersonaId?: number | null; isShared?: boolean | null } }) {
   const initials = persona.name
     .split(" ")
     .map(n => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const isInherited = (persona as any)._isInherited;
+  const isForked = !!(persona as any).parentPersonaId;
+  const isShared = (persona as any).isShared;
+  const heirAccess = (persona as any)._heirAccess;
 
   return (
     <Link href={`/persona/${persona.id}`}>
@@ -61,9 +66,31 @@ function PersonaCard({ persona }: { persona: Persona }) {
                 <h3 className="font-display font-semibold text-foreground leading-tight">{persona.name}</h3>
                 <p className="text-sm text-muted-foreground capitalize mt-0.5">{persona.relationship}</p>
               </div>
-              <Badge variant="outline" className="text-xs flex-shrink-0 capitalize border-primary/30 text-primary">
-                {persona.status}
-              </Badge>
+              <div className="flex gap-1.5 flex-shrink-0">
+                {isShared && !isInherited && (
+                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:text-purple-400 gap-1">
+                    <Users className="h-3 w-3" />
+                    Shared
+                  </Badge>
+                )}
+                {isInherited && (
+                  <Badge variant="outline" className="text-xs border-rose-300 text-rose-700 dark:text-rose-400 gap-1">
+                    <Heart className="h-3 w-3" />
+                    Inherited
+                  </Badge>
+                )}
+                {isForked && (
+                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:text-blue-400 gap-1">
+                    <GitFork className="h-3 w-3" />
+                    Private copy
+                  </Badge>
+                )}
+                {!isInherited && !isForked && !isShared && (
+                  <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary">
+                    {persona.status}
+                  </Badge>
+                )}
+              </div>
             </div>
             {persona.bio && (
               <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{persona.bio}</p>
@@ -75,12 +102,14 @@ function PersonaCard({ persona }: { persona: Persona }) {
                   Speak with {persona.name.split(" ")[0]}
                 </Button>
               </Link>
-              <Link href={`/persona/${persona.id}/memories`} onClick={e => e.stopPropagation()}>
-                <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground">
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Add memories
-                </Button>
-              </Link>
+              {(!isInherited || heirAccess === "full") && (
+                <Link href={`/persona/${persona.id}/memories`} onClick={e => e.stopPropagation()}>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Add memories
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -212,15 +241,63 @@ export default function Home() {
 
         {hasPersonas && (
           <div>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-display text-xl font-semibold text-foreground">Your Echoes</h2>
-              <span className="text-sm text-muted-foreground">{personas.length} persona{personas.length !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="space-y-3">
-              {personas.map(p => (
-                <PersonaCard key={p.id} persona={p} />
-              ))}
-            </div>
+            {/* Group personas into sections */}
+            {(() => {
+              const ownEchoes = personas.filter(p => !(p as any)._isInherited && !(p as any).parentPersonaId);
+              const inheritedEchoes = personas.filter(p => (p as any)._isInherited);
+              const forkedEchoes = personas.filter(p => !!(p as any).parentPersonaId && !(p as any)._isInherited);
+              return (
+                <>
+                  {ownEchoes.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-display text-xl font-semibold text-foreground">My Echoes</h2>
+                        <span className="text-sm text-muted-foreground">{ownEchoes.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {ownEchoes.map(p => <PersonaCard key={p.id} persona={p as any} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {inheritedEchoes.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
+                          <Heart className="h-4 w-4 text-rose-400" />
+                          Shared with me
+                        </h2>
+                        <span className="text-sm text-muted-foreground">{inheritedEchoes.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {inheritedEchoes.map(p => <PersonaCard key={p.id} persona={p as any} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {forkedEchoes.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
+                          <GitFork className="h-4 w-4 text-blue-500" />
+                          My private copies
+                        </h2>
+                        <span className="text-sm text-muted-foreground">{forkedEchoes.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {forkedEchoes.map(p => <PersonaCard key={p.id} persona={p as any} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {ownEchoes.length === 0 && inheritedEchoes.length === 0 && forkedEchoes.length === 0 && (
+                    <div className="flex items-center justify-between mb-5">
+                      <h2 className="font-display text-xl font-semibold text-foreground">Your Echoes</h2>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="mt-6 pt-6 border-t border-border space-y-2">
               {atEchoLimit ? (

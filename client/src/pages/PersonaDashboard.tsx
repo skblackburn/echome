@@ -18,7 +18,7 @@ import {
 import {
   MessageCircle, BookOpen, Mic, Brain, ChevronRight,
   Gift, Users, ScrollText, Sparkles, Heart, Pencil, FileText,
-  AlertTriangle, Trash2
+  AlertTriangle, Trash2, GitFork, Shield
 } from "lucide-react";
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -100,6 +100,7 @@ export default function PersonaDashboard() {
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [forking, setForking] = useState(false);
 
   const handleDeleteEcho = async () => {
     setDeleting(true);
@@ -156,6 +157,26 @@ export default function PersonaDashboard() {
 
   const { persona, traits, memories, media } = data;
   const firstName = persona.name.split(" ")[0];
+  const isInherited = !!(persona as any)._isInherited;
+  const isShared = (persona as any).isShared;
+  const heirAccess = (persona as any)._heirAccess;
+  const isReadOnly = isInherited && heirAccess === "read_only";
+
+  const handleFork = async () => {
+    if (!confirm("This will create your own private version of this Echo. It will start with everything that's here now, but you'll be the only one who sees your future contributions and conversations. You can still access the shared Echo too.")) return;
+    setForking(true);
+    try {
+      const res = await apiRequest("POST", `/api/personas/${personaId}/fork`);
+      const forked = await res.json();
+      toast({ title: "Private copy created", description: `Your copy of ${firstName}'s Echo is ready.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
+      navigate(`/persona/${forked.id}`);
+    } catch (err) {
+      toast({ title: "Couldn't fork", description: String(err), variant: "destructive" });
+    } finally {
+      setForking(false);
+    }
+  };
   const audioCount = media.filter(m => m.type === "audio").length;
   const docCount = memories.filter(m => m.type === "document").length;
   const storyCount = memories.filter(m => m.type !== "document").length;
@@ -188,6 +209,39 @@ export default function PersonaDashboard() {
   return (
     <Layout backTo="/" backLabel="Home" title={persona.name}>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-5">
+
+        {/* Shared Echo banner */}
+        {isInherited && (
+          <div className="rounded-2xl border border-purple-300/50 bg-purple-50 dark:bg-purple-950/20 p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex-shrink-0">
+              <Heart className="h-5 w-5 text-purple-500" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-2">
+                Shared family Echo
+                <Badge variant="outline" className="text-xs border-purple-300 text-purple-600 dark:text-purple-400 gap-1">
+                  <Shield className="h-3 w-3" />
+                  {heirAccess === "full" ? "Full access" : "View & chat only"}
+                </Badge>
+              </div>
+              <p className="text-xs text-purple-600/80 dark:text-purple-400/70 mt-0.5">
+                This Echo was shared with you. {isReadOnly ? "You can chat and view memories." : "You can chat, view, and contribute memories."}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs border-purple-300 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                  disabled={forking}
+                  onClick={handleFork}
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  {forking ? "Creating copy..." : "Fork a private copy"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Anniversary banner */}
         <AnniversaryBanner persona={persona} />
@@ -228,11 +282,13 @@ export default function PersonaDashboard() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
               <h1 className="font-display text-xl font-semibold text-foreground">{persona.name}</h1>
-              <Link href={`/persona/${personaId}/edit`}>
-                <button className="p-1 rounded-md text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Edit profile">
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </Link>
+              {!isInherited && (
+                <Link href={`/persona/${personaId}/edit`}>
+                  <button className="p-1 rounded-md text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Edit profile">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </Link>
+              )}
               <Badge variant="outline" className="capitalize border-primary/30 text-primary text-xs">{persona.relationship}</Badge>
               {persona.pronouns && <Badge variant="outline" className="text-xs text-muted-foreground">{persona.pronouns}</Badge>}
             </div>
@@ -285,46 +341,55 @@ export default function PersonaDashboard() {
 
         {/* Feature grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link href={`/persona/${personaId}/memories`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                <BookOpen className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Add Memories</div>
-                <div className="text-xs text-muted-foreground">Stories, documents, voice, interview</div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
-
-          <Link href={`/persona/${personaId}/milestones`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors flex-shrink-0">
-                <Gift className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Milestone Messages</div>
-                <div className="text-xs text-muted-foreground">
-                  {upcomingMilestones.length > 0 ? `${upcomingMilestones.length} upcoming` : "Future messages for loved ones"}
+          {/* Add Memories — hidden for read-only heirs */}
+          {!isReadOnly && (
+            <Link href={`/persona/${personaId}/memories`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
+                  <BookOpen className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Add Memories</div>
+                  <div className="text-xs text-muted-foreground">Stories, documents, voice, interview</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
+            </Link>
+          )}
 
-          <Link href={`/persona/${personaId}/family`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          {/* Milestone Messages — owner only */}
+          {!isInherited && (
+            <Link href={`/persona/${personaId}/milestones`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors flex-shrink-0">
+                  <Gift className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Milestone Messages</div>
+                  <div className="text-xs text-muted-foreground">
+                    {upcomingMilestones.length > 0 ? `${upcomingMilestones.length} upcoming` : "Future messages for loved ones"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Family Sharing</div>
-                <div className="text-xs text-muted-foreground">Invite family to connect with {firstName}</div>
+            </Link>
+          )}
+
+          {/* Family Sharing — owner only */}
+          {!isInherited && (
+            <Link href={`/persona/${personaId}/family`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
+                  <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Family Sharing</div>
+                  <div className="text-xs text-muted-foreground">Invite family to connect with {firstName}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
+            </Link>
+          )}
 
           <Link href={`/persona/${personaId}/journal`}>
             <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
@@ -339,20 +404,23 @@ export default function PersonaDashboard() {
             </div>
           </Link>
 
-          <Link href={`/persona/${personaId}/documents`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-sky-400/40 hover:bg-sky-50/50 dark:hover:bg-sky-950/10 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-sky-100 dark:group-hover:bg-sky-900/30 transition-colors flex-shrink-0">
-                <FileText className="h-4 w-4 text-muted-foreground group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Manage Documents</div>
-                <div className="text-xs text-muted-foreground">
-                  {docCount > 0 ? `${docCount} uploaded document${docCount !== 1 ? "s" : ""}` : "View and edit uploaded writing"}
+          {/* Manage Documents — owner only */}
+          {!isInherited && (
+            <Link href={`/persona/${personaId}/documents`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-sky-400/40 hover:bg-sky-50/50 dark:hover:bg-sky-950/10 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-sky-100 dark:group-hover:bg-sky-900/30 transition-colors flex-shrink-0">
+                  <FileText className="h-4 w-4 text-muted-foreground group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" />
                 </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Manage Documents</div>
+                  <div className="text-xs text-muted-foreground">
+                    {docCount > 0 ? `${docCount} uploaded document${docCount !== 1 ? "s" : ""}` : "View and edit uploaded writing"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
+            </Link>
+          )}
         </div>
 
         {/* Traits preview */}
@@ -375,7 +443,8 @@ export default function PersonaDashboard() {
           </Card>
         )}
 
-        {/* ── Danger Zone ──────────────────────────────────────────────── */}
+        {/* ── Danger Zone — owner only ────────────────────────────────── */}
+        {!isInherited && (<>
         <div className="mt-6">
           <div className="border border-destructive/30 rounded-xl bg-destructive/5 p-6">
             <h2 className="font-display text-lg font-semibold text-destructive mb-1">Danger Zone</h2>
@@ -461,6 +530,7 @@ export default function PersonaDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </>)}
       </div>
     </Layout>
   );

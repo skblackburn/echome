@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Save, Camera, Trash2, Heart, Plus, X } from "lucide-react";
 import type { Persona } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import HeirSettings from "@/components/HeirSettings";
+import TransferSettings from "@/components/TransferSettings";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -316,6 +318,17 @@ export default function EditPersona() {
           <Save className="h-4 w-4" />
           {saveMutation.isPending ? "Saving..." : "Save changes"}
         </Button>
+
+        {/* Heir Settings */}
+        <HeirSettings personaId={personaId} />
+
+        {/* Transfer Settings */}
+        <TransferSettings
+          personaId={personaId}
+          personaName={persona?.name || ""}
+          isLiving={isLiving}
+          hasHeirs={true}
+        />
 
         {/* Danger zone */}
         <div className="rounded-xl border border-destructive/30 p-4 space-y-3">

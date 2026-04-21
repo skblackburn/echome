@@ -43,6 +43,9 @@ export const personas = pgTable("personas", {
   remembranceDate: text("remembrance_date"),
   passingDate: text("passing_date"),
   isLiving: boolean("is_living").default(true),
+  isShared: boolean("is_shared").default(false),
+  originalCreatorId: integer("original_creator_id"),
+  parentPersonaId: integer("parent_persona_id"),
   status: text("status").notNull().default("active"),
   contributorUserId: integer("contributor_user_id"),
   contributorRelationship: text("contributor_relationship"),
@@ -184,6 +187,7 @@ export const chatMessages = pgTable("chat_messages", {
   personaId: integer("persona_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
+  heirUserId: integer("heir_user_id"),
   contributorUserId: integer("contributor_user_id"),
   contributorRelationship: text("contributor_relationship"),
   perspectiveType: text("perspective_type").default("self"),
@@ -192,6 +196,39 @@ export const chatMessages = pgTable("chat_messages", {
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// ─── Echo Heirs ──────────────────────────────────────────────────────────────
+export const echoHeirs = pgTable("echo_heirs", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id").notNull(),
+  creatorUserId: integer("creator_user_id").notNull(),
+  heirEmail: text("heir_email").notNull(),
+  heirUserId: integer("heir_user_id"),
+  heirName: text("heir_name"),
+  heirRelationship: text("heir_relationship"),
+  accessLevel: text("access_level").notNull().default("full"),
+  status: text("status").notNull().default("pending"),
+  claimToken: text("claim_token").notNull().unique(),
+  claimedAt: timestamp("claimed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertEchoHeirSchema = createInsertSchema(echoHeirs).omit({ id: true, createdAt: true });
+export type InsertEchoHeir = z.infer<typeof insertEchoHeirSchema>;
+export type EchoHeir = typeof echoHeirs.$inferSelect;
+
+// ─── Echo Transfers ──────────────────────────────────────────────────────────
+export const echoTransfers = pgTable("echo_transfers", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id").notNull(),
+  transferTrigger: text("transfer_trigger").notNull(),
+  scheduledDate: text("scheduled_date"),
+  executedAt: timestamp("executed_at"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertEchoTransferSchema = createInsertSchema(echoTransfers).omit({ id: true, createdAt: true });
+export type InsertEchoTransfer = z.infer<typeof insertEchoTransferSchema>;
+export type EchoTransfer = typeof echoTransfers.$inferSelect;
 
 // ─── Writing Styles ──────────────────────────────────────────────────────────
 export const writingStyles = pgTable("writing_styles", {

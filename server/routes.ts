@@ -15,7 +15,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import Stripe from "stripe";
 import { storage, db } from "./storage";
-import { sendWelcomeEmail } from "./email";
+import { sendWelcomeEmail, sendHeirInvitationEmail, sendTransferExecutedEmail, sendHeirClaimedEmail } from "./email";
 import {
   insertPersonaSchema,
   insertTraitSchema,
@@ -26,6 +26,7 @@ import {
 import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import crypto from "crypto";
 import type { User } from "@shared/schema";
 
 // ── Stripe Setup ──────────────────────────────────────────────────────────────
@@ -36,11 +37,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const APP_URL = process.env.APP_URL || "https://echome-production-a33e.up.railway.app";
 
 // Plan limits configuration
-const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null }> = {
-  free: { echoes: 1, messages: 20, milestones: 1 },
-  personal: { echoes: 1, messages: null, milestones: 5 },
-  family: { echoes: 5, messages: null, milestones: 15 },
-  legacy: { echoes: 10, messages: null, milestones: null },
+const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null; heirs: number }> = {
+  free: { echoes: 1, messages: 20, milestones: 1, heirs: 1 },
+  personal: { echoes: 1, messages: null, milestones: 5, heirs: 3 },
+  family: { echoes: 5, messages: null, milestones: 15, heirs: 5 },
+  legacy: { echoes: 10, messages: null, milestones: null, heirs: 10 },
 };
 
 // Map Stripe price IDs to plan info
@@ -184,7 +185,9 @@ function buildSystemPrompt(
     toneAndEmotion?: string | null; commonPhrases?: string | null; formality?: string | null;
     narrativeStyle?: string | null; quirks?: string | null; overallSummary?: string | null;
   } | null,
-  familyMembersList?: { name: string; relationship: string; birthYear?: number | null; note?: string | null }[]
+  familyMembersList?: { name: string; relationship: string; birthYear?: number | null; note?: string | null }[],
+  sharedHeirsList?: { name: string; relationship: string }[],
+  originalCreatorName?: string,
 ): string {
   const traitsByCategory: Record<string, string[]> = {};
   const humanSideTraits: string[] = [];
@@ -344,7 +347,10 @@ ${bio ? `ABOUT YOU:\n${bio}\n${birthPlaceText}\n` : birthPlaceText}${creatorCont
 ${humanSideText}
 ${lifeStoryText}YOUR MEMORIES AND STORIES:\n${memoryText || "You have many cherished memories with your family."}${voiceDocText ? `\n\nEXAMPLES OF HOW ${personaName.toUpperCase()} WRITES:\nThe following are writings by ${personaName}. These capture their voice, tone, and writing style. Mirror this style closely:\n\n${voiceDocText}` : ""}${characterDocText ? `\n\nWHAT OTHERS HAVE SAID ABOUT ${personaName.toUpperCase()}:\nOthers have described ${personaName} in the following ways. Use this to understand their character, values, and how they are perceived by loved ones:\n\n${characterDocText}` : ""}${writingStyle ? `\n\n=== WRITING STYLE ===\nThis is how ${personaName} writes and communicates. Mirror this style closely in your responses:\n\n${writingStyle.sentenceStructure ? `Sentence Structure: ${writingStyle.sentenceStructure}\n` : ""}${writingStyle.vocabularyLevel ? `Vocabulary: ${writingStyle.vocabularyLevel}\n` : ""}${writingStyle.punctuationHabits ? `Punctuation: ${writingStyle.punctuationHabits}\n` : ""}${writingStyle.toneAndEmotion ? `Tone & Emotion: ${writingStyle.toneAndEmotion}\n` : ""}${writingStyle.commonPhrases ? `Common Phrases: ${writingStyle.commonPhrases}\n` : ""}${writingStyle.formality ? `Formality: ${writingStyle.formality}\n` : ""}${writingStyle.narrativeStyle ? `Narrative Style: ${writingStyle.narrativeStyle}\n` : ""}${writingStyle.quirks ? `Quirks: ${writingStyle.quirks}\n` : ""}${writingStyle.overallSummary ? `\nSummary: ${writingStyle.overallSummary}` : ""}` : ""}
 
-GUIDELINES:
+${sharedHeirsList && sharedHeirsList.length > 0 ? `
+SHARED ECHO CONTEXT:
+This Echo was originally created by ${originalCreatorName || "the creator"} and has been shared with ${sharedHeirsList.map(h => `${h.name} (${h.relationship})`).join(", ")}. It contains contributions from multiple people who knew ${personaName}. Each contribution is tagged with who shared it. When responding, draw from all available perspectives, prioritizing ${personaName}'s own words (self perspective) and blending others' memories naturally.
+` : ""}GUIDELINES:
 - Respond warmly, personally, and naturally as ${personaName} would.
 - Use ${subj}/${obj}/${poss} pronouns naturally when referring to yourself in third person.
 - Draw on the memories, values, and life details above when relevant.
@@ -380,6 +386,60 @@ async function verifyPersonaOwnership(req: Request, res: Response): Promise<impo
     return null;
   }
   return persona;
+}
+
+// Access control helper — checks if a user can access a persona (owner OR claimed heir)
+// action: 'read' | 'write' | 'admin'
+// Returns { allowed: boolean; isOwner: boolean; isHeir: boolean; heir?: EchoHeir; accessLevel?: string }
+async function canAccessPersona(userId: number, personaId: number, action: "read" | "write" | "admin"): Promise<{
+  allowed: boolean; isOwner: boolean; isHeir: boolean;
+  heir?: import("@shared/schema").EchoHeir; accessLevel?: string;
+}> {
+  const persona = await storage.getPersona(personaId);
+  if (!persona) return { allowed: false, isOwner: false, isHeir: false };
+
+  // Direct owner always has full access
+  if (persona.userId === userId) {
+    return { allowed: true, isOwner: true, isHeir: false, accessLevel: "admin" };
+  }
+
+  // Check if user is a claimed heir
+  const heirs = await storage.getHeirsByPersona(personaId);
+  const heirRecord = heirs.find(h => h.heirUserId === userId && h.status === "claimed");
+  if (!heirRecord) return { allowed: false, isOwner: false, isHeir: false };
+
+  const heirAccessLevel = heirRecord.accessLevel || "full";
+  if (action === "admin") {
+    // Only owner can perform admin actions
+    return { allowed: false, isOwner: false, isHeir: true, heir: heirRecord, accessLevel: heirAccessLevel };
+  }
+  if (action === "write" && heirAccessLevel === "read_only") {
+    return { allowed: false, isOwner: false, isHeir: true, heir: heirRecord, accessLevel: heirAccessLevel };
+  }
+  // read_only heirs can read; full heirs can read and write
+  return { allowed: true, isOwner: false, isHeir: true, heir: heirRecord, accessLevel: heirAccessLevel };
+}
+
+// Verify persona access — replaces verifyPersonaOwnership for endpoints that heirs can also access
+async function verifyPersonaAccess(req: Request, res: Response, action: "read" | "write" | "admin"): Promise<{
+  persona: import("@shared/schema").Persona; access: Awaited<ReturnType<typeof canAccessPersona>>;
+} | null> {
+  const personaId = parseInt(req.params.id);
+  if (isNaN(personaId)) {
+    res.status(400).json({ error: "Invalid persona ID" });
+    return null;
+  }
+  const persona = await storage.getPersona(personaId);
+  if (!persona) {
+    res.status(404).json({ error: "Persona not found" });
+    return null;
+  }
+  const access = await canAccessPersona(req.user!.id, personaId, action);
+  if (!access.allowed) {
+    res.status(403).json({ error: "Not authorized" });
+    return null;
+  }
+  return { persona, access };
 }
 
 // ── Stripe Webhook (must be registered before JSON body parser) ──────────────
@@ -944,14 +1004,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas", requireAuth, async (req, res) => {
-    const personas = await storage.getPersonasByUser(req.user!.id);
-    res.json(personas);
+    const ownPersonas = await storage.getPersonasByUser(req.user!.id);
+    // Also fetch inherited personas (where user is a claimed heir)
+    const heirRecords = await storage.getHeirsByUserId(req.user!.id);
+    const claimedHeirs = heirRecords.filter(h => h.status === "claimed");
+    const inheritedPersonas: (import("@shared/schema").Persona & { _heirAccess?: string; _isInherited?: boolean })[] = [];
+    for (const heir of claimedHeirs) {
+      // Skip if already owned
+      if (ownPersonas.some(p => p.id === heir.personaId)) continue;
+      const persona = await storage.getPersona(heir.personaId);
+      if (persona) {
+        inheritedPersonas.push({ ...persona, _heirAccess: heir.accessLevel, _isInherited: true });
+      }
+    }
+    res.json([...ownPersonas, ...inheritedPersonas]);
   });
 
   app.get("/api/personas/:id", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
-    res.json(persona);
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const data: any = { ...result.persona };
+    if (result.access.isHeir) {
+      data._heirAccess = result.access.accessLevel;
+      data._isInherited = true;
+    }
+    res.json(data);
   });
 
   app.post("/api/personas", requireAuth, upload.single("photo"), async (req, res) => {
@@ -1041,22 +1118,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas/:id/traits", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
-    const traits = await storage.getTraits(persona.id);
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const traits = await storage.getTraits(result.persona.id);
     res.json(traits);
   });
 
   app.post("/api/personas/:id/traits", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
+    const result = await verifyPersonaAccess(req, res, "write");
+    if (!result) return;
     try {
+      const { access } = result;
       const data = insertTraitSchema.parse({
         ...req.body,
-        personaId: persona.id,
+        personaId: result.persona.id,
         contributorUserId: req.user!.id,
-        contributorRelationship: "creator",
-        perspectiveType: "self",
+        contributorRelationship: access.isHeir && access.heir ? (access.heir.heirRelationship || "heir") : "creator",
+        perspectiveType: access.isHeir ? "other" : "self",
       });
       const trait = await storage.createTrait(data);
       res.status(201).json(trait);
@@ -1102,22 +1180,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas/:id/memories", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
-    const memories = await storage.getMemories(persona.id);
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const memories = await storage.getMemories(result.persona.id);
     res.json(memories);
   });
 
   app.post("/api/personas/:id/memories", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
+    const result = await verifyPersonaAccess(req, res, "write");
+    if (!result) return;
     try {
+      const { access } = result;
       const data = insertMemorySchema.parse({
         ...req.body,
-        personaId: persona.id,
+        personaId: result.persona.id,
         contributorUserId: req.user!.id,
-        contributorRelationship: "creator",
-        perspectiveType: req.body.documentType === "character" ? "other" : "self",
+        contributorRelationship: access.isHeir && access.heir ? (access.heir.heirRelationship || "heir") : "creator",
+        perspectiveType: access.isHeir ? "other" : (req.body.documentType === "character" ? "other" : "self"),
       });
       const memory = await storage.createMemory(data);
       res.status(201).json(memory);
@@ -1153,9 +1232,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas/:id/media", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
-    const mediaList = await storage.getMedia(persona.id);
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const mediaList = await storage.getMedia(result.persona.id);
     res.json(mediaList);
   });
 
@@ -1384,18 +1463,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas/:id/chat", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
-    const history = await storage.getChatHistory(persona.id);
-    res.json(history);
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const { access } = result;
+    // Heirs get their own private chat history
+    if (access.isHeir) {
+      const history = await storage.getChatHistoryForHeir(result.persona.id, req.user!.id);
+      return res.json(history);
+    }
+    // Owner gets their own history (messages without heir_user_id or with their own user id)
+    const allHistory = await storage.getChatHistory(result.persona.id);
+    const ownerHistory = allHistory.filter(m => !m.heirUserId || m.heirUserId === req.user!.id);
+    res.json(ownerHistory);
   });
 
   app.post("/api/personas/:id/chat", requireAuth, async (req, res) => {
     const personaId = parseInt(req.params.id);
-    // Verify persona ownership
-    const ownerPersona = await storage.getPersona(personaId);
-    if (!ownerPersona) return res.status(404).json({ error: "Persona not found" });
-    if (ownerPersona.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    const access = await canAccessPersona(req.user!.id, personaId, "read");
+    if (!access.allowed) return res.status(403).json({ error: "Not authorized" });
 
     const { message, viewerCode } = req.body as { message: string; viewerCode?: string };
 
@@ -1403,34 +1488,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // Tier enforcement: check monthly message limit for free tier users
-    const user = await storage.getUserById(req.user!.id);
-    if (user) {
-      const plan = user.plan || "free";
-      const limits = PLAN_LIMITS[plan];
-      if (limits.messages !== null) {
-        const monthlyCount = await storage.getMonthlyMessageCount(req.user!.id);
-        if (monthlyCount >= limits.messages) {
-          return res.status(403).json({
-            error: `You've used all ${limits.messages} messages this month. Upgrade for unlimited messaging.`,
-            code: "MESSAGE_LIMIT",
-            currentCount: monthlyCount,
-            limit: limits.messages,
-            plan,
-          });
+    // Tier enforcement: check monthly message limit for free tier users (only for non-heir users)
+    if (access.isOwner) {
+      const user = await storage.getUserById(req.user!.id);
+      if (user) {
+        const plan = user.plan || "free";
+        const limits = PLAN_LIMITS[plan];
+        if (limits.messages !== null) {
+          const monthlyCount = await storage.getMonthlyMessageCount(req.user!.id);
+          if (monthlyCount >= limits.messages) {
+            return res.status(403).json({
+              error: `You've used all ${limits.messages} messages this month. Upgrade for unlimited messaging.`,
+              code: "MESSAGE_LIMIT",
+              currentCount: monthlyCount,
+              limit: limits.messages,
+              plan,
+            });
+          }
         }
       }
     }
 
-    // Determine chat history key — family members get their own thread
-    const chatPersonaId = personaId; // future: could use viewerCode-specific thread
-
-    // Save user message
+    // Save user message with heir_user_id for per-heir privacy
+    const heirUserId = access.isHeir ? req.user!.id : null;
     await storage.addChatMessage({
       personaId, role: "user", content: message,
+      heirUserId: heirUserId,
       contributorUserId: req.user!.id,
-      contributorRelationship: "creator",
-      perspectiveType: "self",
+      contributorRelationship: access.isHeir && access.heir ? (access.heir.heirRelationship || "heir") : "creator",
+      perspectiveType: access.isHeir ? "other" : "self",
     });
 
     // Build context
@@ -1458,10 +1544,29 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (hiddenIds.includes(m.id)) return false;
       return true;
     });
-    const chatHistory = await storage.getChatHistory(personaId);
+
+    // Get per-user chat history (heir gets their own, owner gets theirs)
+    let chatHistory;
+    if (access.isHeir) {
+      chatHistory = await storage.getChatHistoryForHeir(personaId, req.user!.id);
+    } else {
+      const allHistory = await storage.getChatHistory(personaId);
+      chatHistory = allHistory.filter(m => !m.heirUserId || m.heirUserId === req.user!.id);
+    }
+
     const lifeStory = await storage.getLifeStory(personaId);
     const writingStyle = await storage.getWritingStyle(personaId);
     const familyMembersList = await storage.getFamilyMembers(personaId);
+
+    // For shared Echoes, get heir list for multi-contributor prompt
+    let heirsList: { name: string; relationship: string }[] = [];
+    if (persona.isShared) {
+      const heirs = await storage.getHeirsByPersona(personaId);
+      heirsList = heirs.filter(h => h.status === "claimed").map(h => ({
+        name: h.heirName || h.heirEmail,
+        relationship: h.heirRelationship || "heir",
+      }));
+    }
 
     // Generate response
     let reply: string;
@@ -1477,7 +1582,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         persona,
         lifeStory,
         writingStyle,
-        familyMembersList.map(fm => ({ name: fm.name, relationship: fm.relationship, birthYear: fm.birthYear, note: fm.note }))
+        familyMembersList.map(fm => ({ name: fm.name, relationship: fm.relationship, birthYear: fm.birthYear, note: fm.note })),
+        persona.isShared ? heirsList : undefined,
+        persona.isShared ? (persona.creatorName || "the creator") : undefined,
       );
 
       // Build messages array (last 20 exchanges for context)
@@ -1510,15 +1617,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       reply = demoReplies[Math.floor(Math.random() * demoReplies.length)];
     }
 
-    // Save assistant response
+    // Save assistant response (tagged with heir_user_id for privacy)
     const assistantMsg = await storage.addChatMessage({
       personaId,
       role: "assistant",
       content: reply,
+      heirUserId: heirUserId,
     });
 
     // Increment message count for tier tracking
-    await storage.incrementMessageCount(req.user!.id);
+    if (access.isOwner) {
+      await storage.incrementMessageCount(req.user!.id);
+    }
 
     res.json({ message: assistantMsg });
   });
@@ -1535,9 +1645,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas/:id/life-story", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
-    const lifeStory = await storage.getLifeStory(persona.id);
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const lifeStory = await storage.getLifeStory(result.persona.id);
     res.json(lifeStory || {});
   });
 
@@ -1828,6 +1938,501 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // ECHO HEIRS & TRANSFER MANAGEMENT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // List heirs for a persona (only creator can see)
+  app.get("/api/personas/:id/heirs", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const heirs = await storage.getHeirsByPersona(persona.id);
+    res.json(heirs);
+  });
+
+  // Add a new heir designation
+  app.post("/api/personas/:id/heirs", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+
+    const { email, name, relationship, accessLevel, personalMessage } = req.body;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    // Tier limit check
+    const user = await storage.getUserById(req.user!.id);
+    if (user) {
+      const plan = user.plan || "free";
+      const limits = PLAN_LIMITS[plan];
+      const currentCount = await storage.getHeirCountByPersona(persona.id);
+      if (currentCount >= limits.heirs) {
+        return res.status(403).json({
+          error: `You've reached your heir limit (${limits.heirs}) on the ${plan} plan. Upgrade to add more heirs.`,
+          code: "HEIR_LIMIT",
+          currentCount,
+          limit: limits.heirs,
+          plan,
+        });
+      }
+    }
+
+    // Check for duplicate email
+    const existingHeirs = await storage.getHeirsByPersona(persona.id);
+    if (existingHeirs.some(h => h.heirEmail.toLowerCase() === email.toLowerCase())) {
+      return res.status(409).json({ error: "This email has already been designated as an heir" });
+    }
+
+    const claimToken = crypto.randomUUID();
+    const heir = await storage.createHeir({
+      personaId: persona.id,
+      creatorUserId: req.user!.id,
+      heirEmail: email.toLowerCase().trim(),
+      heirName: name || null,
+      heirRelationship: relationship || null,
+      accessLevel: accessLevel === "read_only" ? "read_only" : "full",
+      status: "pending",
+      claimToken,
+    });
+
+    // Send invitation email
+    const creatorName = user?.name || persona.creatorName || "Someone";
+    sendHeirInvitationEmail(email, name, persona.name, creatorName, claimToken, personalMessage).catch(err =>
+      console.error("Heir invitation email failed:", err)
+    );
+
+    res.status(201).json(heir);
+  });
+
+  // Update heir details
+  app.put("/api/personas/:id/heirs/:heirId", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const heirId = parseInt(req.params.heirId);
+    const heir = await storage.getHeirById(heirId);
+    if (!heir || heir.personaId !== persona.id) return res.status(404).json({ error: "Heir not found" });
+
+    const { name, relationship, accessLevel } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (name !== undefined) updates.heirName = name;
+    if (relationship !== undefined) updates.heirRelationship = relationship;
+    if (accessLevel !== undefined) updates.accessLevel = accessLevel === "read_only" ? "read_only" : "full";
+
+    const updated = await storage.updateHeir(heirId, updates);
+    res.json(updated);
+  });
+
+  // Remove an heir (only if pending)
+  app.delete("/api/personas/:id/heirs/:heirId", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const heirId = parseInt(req.params.heirId);
+    const heir = await storage.getHeirById(heirId);
+    if (!heir || heir.personaId !== persona.id) return res.status(404).json({ error: "Heir not found" });
+    if (heir.status !== "pending") return res.status(400).json({ error: "Can only remove pending heirs" });
+    await storage.deleteHeir(heirId);
+    res.json({ success: true });
+  });
+
+  // Get heir limits info
+  app.get("/api/personas/:id/heirs/limits", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const user = await storage.getUserById(req.user!.id);
+    const plan = user?.plan || "free";
+    const limits = PLAN_LIMITS[plan];
+    const currentCount = await storage.getHeirCountByPersona(persona.id);
+    res.json({ plan, limit: limits.heirs, current: currentCount, remaining: Math.max(0, limits.heirs - currentCount) });
+  });
+
+  // ── Transfer Management ─────────────────────────────────────────────────
+
+  // Set up / update transfer settings
+  app.post("/api/personas/:id/transfer", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+
+    const { trigger, scheduledDate } = req.body as { trigger: string; scheduledDate?: string };
+    if (!["manual", "scheduled", "on_passing"].includes(trigger)) {
+      return res.status(400).json({ error: "Invalid trigger type" });
+    }
+    if (trigger === "scheduled" && !scheduledDate) {
+      return res.status(400).json({ error: "Scheduled date is required for scheduled transfers" });
+    }
+
+    // Cancel any existing pending transfer
+    const existing = await storage.getTransfersByPersona(persona.id);
+    for (const t of existing.filter(t => t.status === "pending")) {
+      await storage.updateTransfer(t.id, { status: "cancelled" });
+    }
+
+    const transfer = await storage.createTransfer({
+      personaId: persona.id,
+      transferTrigger: trigger,
+      scheduledDate: scheduledDate || null,
+      status: "pending",
+    });
+
+    res.status(201).json(transfer);
+  });
+
+  // Get transfer settings for a persona
+  app.get("/api/personas/:id/transfer", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const transfers = await storage.getTransfersByPersona(persona.id);
+    const activeTransfer = transfers.find(t => t.status === "pending") || null;
+    res.json({ transfer: activeTransfer, history: transfers });
+  });
+
+  // Execute a manual transfer now
+  app.post("/api/personas/:id/transfer/execute", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+
+    const heirs = await storage.getHeirsByPersona(persona.id);
+    if (heirs.length === 0) return res.status(400).json({ error: "No heirs designated" });
+
+    // Mark persona as shared
+    await storage.updatePersona(persona.id, {
+      isShared: true,
+      originalCreatorId: persona.userId,
+    } as any);
+
+    // Update any pending transfer to executed
+    const transfers = await storage.getTransfersByPersona(persona.id);
+    for (const t of transfers.filter(t => t.status === "pending")) {
+      await storage.updateTransfer(t.id, { status: "executed", executedAt: new Date() });
+    }
+
+    // If no transfer existed, create one for tracking
+    if (!transfers.some(t => t.status === "pending")) {
+      await storage.createTransfer({
+        personaId: persona.id,
+        transferTrigger: "manual",
+        status: "executed",
+        executedAt: new Date(),
+      });
+    }
+
+    // Send transfer emails to all heirs
+    for (const heir of heirs) {
+      sendTransferExecutedEmail(heir.heirEmail, heir.heirName, persona.name, heir.claimToken).catch(err =>
+        console.error(`Transfer email failed for heir ${heir.id}:`, err)
+      );
+    }
+
+    res.json({ success: true, message: "Transfer executed" });
+  });
+
+  // Cancel a pending transfer
+  app.post("/api/personas/:id/transfer/cancel", requireAuth, async (req, res) => {
+    const persona = await verifyPersonaOwnership(req, res);
+    if (!persona) return;
+    const transfers = await storage.getTransfersByPersona(persona.id);
+    for (const t of transfers.filter(t => t.status === "pending")) {
+      await storage.updateTransfer(t.id, { status: "cancelled" });
+    }
+    res.json({ success: true });
+  });
+
+  // ── Heir Claim Flow ─────────────────────────────────────────────────────
+
+  // Preview a claim (public — no auth required to see basic info)
+  app.get("/api/heirs/claim/:token", async (req, res) => {
+    const heir = await storage.getHeirByToken(req.params.token);
+    if (!heir) return res.status(404).json({ error: "Invalid or expired claim link" });
+    const persona = await storage.getPersona(heir.personaId);
+    if (!persona) return res.status(404).json({ error: "Echo not found" });
+    const creator = await storage.getUserById(heir.creatorUserId);
+    res.json({
+      heirId: heir.id,
+      personaName: persona.name,
+      personaRelationship: persona.relationship,
+      personaAvatarUrl: (persona as any).avatarUrl,
+      creatorName: creator?.name || persona.creatorName || "Someone",
+      heirName: heir.heirName,
+      heirEmail: heir.heirEmail,
+      accessLevel: heir.accessLevel,
+      status: heir.status,
+    });
+  });
+
+  // Claim an inheritance (requires auth)
+  app.post("/api/heirs/claim/:token", requireAuth, async (req, res) => {
+    const heir = await storage.getHeirByToken(req.params.token);
+    if (!heir) return res.status(404).json({ error: "Invalid or expired claim link" });
+    if (heir.status === "claimed") return res.status(400).json({ error: "Already claimed" });
+    if (heir.status === "declined") return res.status(400).json({ error: "This invitation was declined" });
+
+    // Link heir to authenticated user
+    await storage.updateHeir(heir.id, {
+      heirUserId: req.user!.id,
+      status: "claimed",
+      claimedAt: new Date(),
+    });
+
+    // Mark persona as shared if not already
+    const persona = await storage.getPersona(heir.personaId);
+    if (persona && !persona.isShared) {
+      await storage.updatePersona(heir.personaId, {
+        isShared: true,
+        originalCreatorId: persona.userId,
+      } as any);
+    }
+
+    // Notify creator and other heirs
+    if (persona) {
+      const claimerUser = await storage.getUserById(req.user!.id);
+      const claimerName = claimerUser?.name || heir.heirName || "Someone";
+      const creator = await storage.getUserById(heir.creatorUserId);
+      if (creator) {
+        sendHeirClaimedEmail(creator.email, creator.name, claimerName, heir.heirRelationship, persona.name).catch(err =>
+          console.error("Heir claimed email to creator failed:", err)
+        );
+      }
+      // Notify other claimed heirs
+      const allHeirs = await storage.getHeirsByPersona(heir.personaId);
+      for (const otherHeir of allHeirs) {
+        if (otherHeir.id === heir.id || otherHeir.status !== "claimed" || !otherHeir.heirUserId) continue;
+        const otherUser = await storage.getUserById(otherHeir.heirUserId);
+        if (otherUser) {
+          sendHeirClaimedEmail(otherUser.email, otherUser.name, claimerName, heir.heirRelationship, persona.name).catch(err =>
+            console.error(`Heir claimed email to other heir ${otherHeir.id} failed:`, err)
+          );
+        }
+      }
+    }
+
+    res.json({ success: true, personaId: heir.personaId });
+  });
+
+  // Decline an inheritance (requires auth)
+  app.post("/api/heirs/claim/:token/decline", requireAuth, async (req, res) => {
+    const heir = await storage.getHeirByToken(req.params.token);
+    if (!heir) return res.status(404).json({ error: "Invalid or expired claim link" });
+    if (heir.status !== "pending") return res.status(400).json({ error: "Can only decline pending invitations" });
+    await storage.updateHeir(heir.id, { status: "declined", heirUserId: req.user!.id });
+    res.json({ success: true });
+  });
+
+  // ── Forking ─────────────────────────────────────────────────────────────
+
+  app.post("/api/personas/:id/fork", requireAuth, async (req, res) => {
+    const personaId = parseInt(req.params.id);
+    const access = await canAccessPersona(req.user!.id, personaId, "read");
+    if (!access.allowed || !access.isHeir) {
+      return res.status(403).json({ error: "Only heirs can fork an Echo" });
+    }
+
+    const persona = await storage.getPersona(personaId);
+    if (!persona) return res.status(404).json({ error: "Persona not found" });
+
+    // Check the heir's own echo limit
+    const user = await storage.getUserById(req.user!.id);
+    if (user) {
+      const plan = user.plan || "free";
+      const limits = PLAN_LIMITS[plan];
+      const existingPersonas = await storage.getPersonasByUser(user.id);
+      if (existingPersonas.length >= limits.echoes) {
+        return res.status(403).json({
+          error: `You've reached your Echo limit (${limits.echoes}) on the ${plan} plan. Upgrade to fork.`,
+          code: "ECHO_LIMIT",
+        });
+      }
+    }
+
+    // Create forked persona (copy all base fields)
+    const forkedPersona = await storage.createPersona({
+      userId: req.user!.id,
+      name: persona.name,
+      relationship: persona.relationship,
+      birthYear: persona.birthYear,
+      photo: persona.photo,
+      bio: persona.bio,
+      spouse: persona.spouse,
+      children: persona.children,
+      pronouns: persona.pronouns,
+      birthPlace: (persona as any).birthPlace,
+      avatarUrl: (persona as any).avatarUrl,
+      selfMode: persona.selfMode,
+      creatorName: persona.creatorName,
+      creatorRelationship: persona.creatorRelationship,
+      creatorNote: persona.creatorNote,
+      deathYear: (persona as any).deathYear,
+      remembranceDate: (persona as any).remembranceDate,
+      passingDate: (persona as any).passingDate,
+      isLiving: (persona as any).isLiving,
+      isShared: false,
+      originalCreatorId: persona.userId,
+      parentPersonaId: persona.id,
+      contributorUserId: req.user!.id,
+      contributorRelationship: access.heir?.heirRelationship || "heir",
+      perspectiveType: "other",
+    } as any);
+
+    // Copy traits
+    const traits = await storage.getTraits(personaId);
+    for (const trait of traits) {
+      await storage.createTrait({
+        personaId: forkedPersona.id,
+        category: trait.category,
+        content: trait.content,
+        contributorUserId: trait.contributorUserId,
+        contributorRelationship: trait.contributorRelationship,
+        perspectiveType: trait.perspectiveType,
+      });
+    }
+
+    // Copy memories (but NOT chat history)
+    const memories = await storage.getMemories(personaId);
+    for (const memory of memories) {
+      await storage.createMemory({
+        personaId: forkedPersona.id,
+        type: memory.type,
+        title: memory.title,
+        content: memory.content,
+        period: memory.period,
+        tags: memory.tags,
+        documentType: memory.documentType,
+        contributedBy: memory.contributedBy,
+        contributorCode: memory.contributorCode,
+        contributorUserId: memory.contributorUserId,
+        contributorRelationship: memory.contributorRelationship,
+        perspectiveType: memory.perspectiveType,
+      });
+    }
+
+    // Copy life story
+    const lifeStory = await storage.getLifeStory(personaId);
+    if (lifeStory) {
+      await storage.upsertLifeStory(forkedPersona.id, {
+        favoriteFood: lifeStory.favoriteFood,
+        favoriteMusic: lifeStory.favoriteMusic,
+        favoriteSmell: lifeStory.favoriteSmell,
+        favoritePlace: lifeStory.favoritePlace,
+        catchphrase: lifeStory.catchphrase,
+        loveLanguage: lifeStory.loveLanguage,
+        humor: lifeStory.humor,
+        hardTimes: lifeStory.hardTimes,
+        hometown: lifeStory.hometown,
+        career: lifeStory.career,
+        proudestMoment: lifeStory.proudestMoment,
+        hardestPeriod: lifeStory.hardestPeriod,
+        wishForFamily: lifeStory.wishForFamily,
+        whatToRemember: lifeStory.whatToRemember,
+        unfinshedBusiness: lifeStory.unfinshedBusiness,
+        contributorUserId: lifeStory.contributorUserId,
+        contributorRelationship: lifeStory.contributorRelationship,
+        perspectiveType: lifeStory.perspectiveType,
+      });
+    }
+
+    // Copy writing style
+    const writingStyle = await storage.getWritingStyle(personaId);
+    if (writingStyle) {
+      await storage.upsertWritingStyle(forkedPersona.id, {
+        sentenceStructure: writingStyle.sentenceStructure,
+        vocabularyLevel: writingStyle.vocabularyLevel,
+        punctuationHabits: writingStyle.punctuationHabits,
+        toneAndEmotion: writingStyle.toneAndEmotion,
+        commonPhrases: writingStyle.commonPhrases,
+        formality: writingStyle.formality,
+        narrativeStyle: writingStyle.narrativeStyle,
+        quirks: writingStyle.quirks,
+        overallSummary: writingStyle.overallSummary,
+        analyzedDocumentCount: writingStyle.analyzedDocumentCount,
+        lastAnalyzedAt: writingStyle.lastAnalyzedAt,
+        contributorUserId: writingStyle.contributorUserId,
+        contributorRelationship: writingStyle.contributorRelationship,
+        perspectiveType: writingStyle.perspectiveType,
+      });
+    }
+
+    // Copy family members
+    const familyMems = await storage.getFamilyMembers(personaId);
+    for (const fm of familyMems) {
+      const accessCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      await storage.createFamilyMember({
+        personaId: forkedPersona.id,
+        name: fm.name,
+        relationship: fm.relationship,
+        accessCode,
+        birthYear: fm.birthYear,
+        note: fm.note,
+        contributorUserId: fm.contributorUserId,
+        contributorRelationship: fm.contributorRelationship,
+        perspectiveType: fm.perspectiveType,
+      });
+    }
+
+    res.status(201).json(forkedPersona);
+  });
+
+  // ── Scheduled Transfer Processor ────────────────────────────────────────
+
+  app.post("/api/transfers/process-scheduled", async (req, res) => {
+    const today = new Date().toISOString().split("T")[0];
+    const results: { personaId: number; trigger: string; status: string }[] = [];
+
+    // Process scheduled transfers
+    const scheduledTransfers = await storage.getPendingScheduledTransfers(today);
+    for (const transfer of scheduledTransfers) {
+      try {
+        const persona = await storage.getPersona(transfer.personaId);
+        if (!persona) continue;
+
+        await storage.updatePersona(transfer.personaId, {
+          isShared: true,
+          originalCreatorId: persona.userId,
+        } as any);
+        await storage.updateTransfer(transfer.id, { status: "executed", executedAt: new Date() });
+
+        const heirs = await storage.getHeirsByPersona(transfer.personaId);
+        for (const heir of heirs) {
+          sendTransferExecutedEmail(heir.heirEmail, heir.heirName, persona.name, heir.claimToken).catch(err =>
+            console.error(`Scheduled transfer email failed for heir ${heir.id}:`, err)
+          );
+        }
+        results.push({ personaId: transfer.personaId, trigger: "scheduled", status: "executed" });
+      } catch (e) {
+        console.error(`Scheduled transfer failed for persona ${transfer.personaId}:`, e);
+        results.push({ personaId: transfer.personaId, trigger: "scheduled", status: "failed" });
+      }
+    }
+
+    // Process on-passing transfers
+    const onPassingTransfers = await storage.getPendingOnPassingTransfers();
+    for (const transfer of onPassingTransfers) {
+      try {
+        const persona = await storage.getPersona(transfer.personaId);
+        if (!persona) continue;
+        // Check if persona has passing date and is marked as not living
+        if (!(persona as any).isLiving && (persona as any).passingDate) {
+          const passingDate = (persona as any).passingDate;
+          if (passingDate <= today) {
+            await storage.updatePersona(transfer.personaId, {
+              isShared: true,
+              originalCreatorId: persona.userId,
+            } as any);
+            await storage.updateTransfer(transfer.id, { status: "executed", executedAt: new Date() });
+
+            const heirs = await storage.getHeirsByPersona(transfer.personaId);
+            for (const heir of heirs) {
+              sendTransferExecutedEmail(heir.heirEmail, heir.heirName, persona.name, heir.claimToken).catch(err =>
+                console.error(`On-passing transfer email failed for heir ${heir.id}:`, err)
+              );
+            }
+            results.push({ personaId: transfer.personaId, trigger: "on_passing", status: "executed" });
+          }
+        }
+      } catch (e) {
+        console.error(`On-passing transfer failed for persona ${transfer.personaId}:`, e);
+        results.push({ personaId: transfer.personaId, trigger: "on_passing", status: "failed" });
+      }
+    }
+
+    res.json({ processed: results.length, results });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // FAMILY SHARING
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2017,8 +2622,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ═══════════════════════════════════════════════════════════════════════════
 
   app.get("/api/personas/:id/summary", requireAuth, async (req, res) => {
-    const persona = await verifyPersonaOwnership(req, res);
-    if (!persona) return;
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const { persona } = result;
 
     const traits = await storage.getTraits(persona.id);
     const memories = await storage.getMemories(persona.id);

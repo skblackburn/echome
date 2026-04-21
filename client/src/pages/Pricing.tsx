@@ -29,7 +29,7 @@ const tiers = [
     annualPriceId: null,
     echoes: "1 Echo",
     messages: "20 messages/month",
-    features: ["1 Echo persona", "20 messages/month", "Memory archive", "Voice recordings", "1 milestone message"],
+    features: ["1 Echo persona", "20 messages/month", "Memory archive", "Voice recordings", "1 milestone message", "1 heir per Echo"],
   },
   {
     name: "Personal",
@@ -40,7 +40,7 @@ const tiers = [
     annualPriceId: "price_1TMBkw8vT1Bw3iGUqB6rTbmp",
     echoes: "1 Echo",
     messages: "Unlimited",
-    features: ["1 Echo persona", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "5 milestone messages"],
+    features: ["1 Echo persona", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "5 milestone messages", "Up to 3 heirs per Echo"],
   },
   {
     name: "Family",
@@ -52,7 +52,7 @@ const tiers = [
     echoes: "5 Echoes",
     messages: "Unlimited",
     popular: true,
-    features: ["Up to 5 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "15 milestone messages"],
+    features: ["Up to 5 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "15 milestone messages", "Up to 5 heirs per Echo"],
   },
   {
     name: "Legacy",
@@ -63,7 +63,7 @@ const tiers = [
     annualPriceId: "price_1TMBky8vT1Bw3iGU4SvvuG58",
     echoes: "10 Echoes",
     messages: "Unlimited",
-    features: ["Up to 10 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "Unlimited milestone messages"],
+    features: ["Up to 10 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "Unlimited milestone messages", "Up to 10 heirs per Echo"],
   },
 ];
 

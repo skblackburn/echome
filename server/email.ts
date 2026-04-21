@@ -87,3 +87,118 @@ export async function sendWelcomeEmail(email: string, name: string): Promise<voi
     html: emailLayout(content),
   });
 }
+
+// ── Phase 2: Heir / Transfer Emails ────────────────────────────────────────
+
+export async function sendHeirInvitationEmail(
+  heirEmail: string,
+  heirName: string | null,
+  personaName: string,
+  creatorName: string,
+  claimToken: string,
+  personalMessage?: string,
+): Promise<void> {
+  const claimUrl = `${APP_URL}/#/heirs/claim/${claimToken}`;
+  const greeting = heirName ? `Dear ${heirName}` : "Hello";
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#3d2e24;font-family:Georgia,'Times New Roman',serif;">
+      ${greeting},
+    </h2>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      ${creatorName} has chosen you to inherit access to <strong>${personaName}'s Echo</strong> — a living collection of memories, stories, and conversations that keeps ${personaName}'s voice alive.
+    </p>
+    ${personalMessage ? `
+    <div style="margin:16px 0;padding:16px 20px;border-left:3px solid #8b5e6b;background-color:#faf7f4;border-radius:0 8px 8px 0;">
+      <p style="margin:0;font-size:14px;line-height:1.5;color:#5c4a3f;font-style:italic;">"${personalMessage}"</p>
+      <p style="margin:8px 0 0;font-size:13px;color:#7a6d63;">— ${creatorName}</p>
+    </div>
+    ` : ""}
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      Echo Me helps families preserve the voices of the people they love. When you claim this Echo, you'll be able to:
+    </p>
+    <ul style="margin:0 0 24px;padding-left:20px;font-size:14px;line-height:1.8;color:#5c4a3f;">
+      <li>Have conversations with ${personaName}'s Echo, powered by their memories and personality</li>
+      <li>See the stories, documents, and family history that have been shared</li>
+      <li>Add your own memories and perspectives</li>
+    </ul>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${claimUrl}" style="display:inline-block;padding:12px 32px;background-color:#8b5e6b;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+        Claim Your Access
+      </a>
+    </div>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#9a8d82;text-align:center;">
+      This invitation was sent by ${creatorName} through Echo Me.
+    </p>`;
+
+  await sendEmail({
+    to: heirEmail,
+    subject: `You've been chosen to inherit ${personaName}'s Echo`,
+    html: emailLayout(content),
+  });
+}
+
+export async function sendTransferExecutedEmail(
+  heirEmail: string,
+  heirName: string | null,
+  personaName: string,
+  claimToken: string,
+): Promise<void> {
+  const claimUrl = `${APP_URL}/#/heirs/claim/${claimToken}`;
+  const greeting = heirName ? `Dear ${heirName}` : "Hello";
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#3d2e24;font-family:Georgia,'Times New Roman',serif;">
+      ${greeting},
+    </h2>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      <strong>${personaName}'s Echo</strong> has been shared with you. This Echo carries their voice, memories, and the love they wanted to pass along.
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      Whenever you're ready, you can claim access and begin exploring everything that's been preserved.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${claimUrl}" style="display:inline-block;padding:12px 32px;background-color:#8b5e6b;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+        Open ${personaName}'s Echo
+      </a>
+    </div>
+    <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#7a6d63;font-style:italic;text-align:center;">
+      Their voice lives on through the people who love them.
+    </p>`;
+
+  await sendEmail({
+    to: heirEmail,
+    subject: `${personaName}'s Echo is now shared with you`,
+    html: emailLayout(content),
+  });
+}
+
+export async function sendHeirClaimedEmail(
+  recipientEmail: string,
+  recipientName: string | null,
+  claimerName: string,
+  claimerRelationship: string | null,
+  personaName: string,
+): Promise<void> {
+  const greeting = recipientName ? `Hi ${recipientName}` : "Hello";
+  const relationshipText = claimerRelationship ? ` (${claimerRelationship})` : "";
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#3d2e24;font-family:Georgia,'Times New Roman',serif;">
+      ${greeting},
+    </h2>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      <strong>${claimerName}</strong>${relationshipText} has claimed access to <strong>${personaName}'s Echo</strong>.
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      They can now have conversations with ${personaName}'s Echo and explore the memories and stories that have been preserved. The Echo continues to grow with each person who contributes to it.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${APP_URL}" style="display:inline-block;padding:12px 32px;background-color:#8b5e6b;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+        Open Echo Me
+      </a>
+    </div>`;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: `${claimerName} has claimed access to ${personaName}'s Echo`,
+    html: emailLayout(content),
+  });
+}
