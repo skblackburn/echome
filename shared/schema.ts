@@ -254,3 +254,23 @@ export const writingStyles = pgTable("writing_styles", {
 export const insertWritingStyleSchema = createInsertSchema(writingStyles).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertWritingStyle = z.infer<typeof insertWritingStyleSchema>;
 export type WritingStyle = typeof writingStyles.$inferSelect;
+
+// ─── Journal Entries ────────────────────────────────────────────────────────
+export const journalEntries = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  title: text("title"),
+  content: text("content").notNull(),
+  entryDate: text("entry_date").notNull(),
+  mood: text("mood"),
+  includedInEcho: boolean("included_in_echo").default(false),
+  echoPersonaId: integer("echo_persona_id"),
+  linkedMemoryId: integer("linked_memory_id"),
+  reflectionCount: integer("reflection_count").notNull().default(0),
+  aiReflections: text("ai_reflections"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+export type JournalEntry = typeof journalEntries.$inferSelect;

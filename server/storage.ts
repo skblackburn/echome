@@ -14,6 +14,7 @@ import type {
   WritingStyle, InsertWritingStyle,
   EchoHeir, InsertEchoHeir,
   EchoTransfer, InsertEchoTransfer,
+  JournalEntry, InsertJournalEntry,
   User,
 } from "@shared/schema";
 
@@ -308,6 +309,24 @@ export async function initDb() {
   await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS parent_persona_id INTEGER`.catch(() => {});
   await client`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS heir_user_id INTEGER`.catch(() => {});
 
+  // ── Journal Entries ─────────────────────────────────────────────────────
+  await client`
+    CREATE TABLE IF NOT EXISTS journal_entries (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      content TEXT NOT NULL,
+      entry_date TEXT NOT NULL,
+      mood TEXT,
+      included_in_echo BOOLEAN DEFAULT FALSE,
+      echo_persona_id INTEGER,
+      linked_memory_id INTEGER,
+      reflection_count INTEGER NOT NULL DEFAULT 0,
+      ai_reflections TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`;
+
   console.log("Database tables ready");
 }
 
@@ -403,6 +422,15 @@ export interface IStorage {
   updateUserStatus(userId: number, status: string): Promise<User | undefined>;
   deleteAllUserData(userId: number): Promise<void>;
   deleteUser(userId: number): Promise<void>;
+
+  // Journal Entries
+  getJournalEntriesByUser(userId: number, limit?: number, offset?: number): Promise<JournalEntry[]>;
+  getJournalEntryById(id: number): Promise<JournalEntry | undefined>;
+  createJournalEntry(data: InsertJournalEntry): Promise<JournalEntry>;
+  updateJournalEntry(id: number, data: Partial<InsertJournalEntry>): Promise<JournalEntry | undefined>;
+  deleteJournalEntry(id: number): Promise<void>;
+  getJournalEntryCountByUser(userId: number): Promise<number>;
+  getMonthlyReflectionCount(userId: number): Promise<number>;
 
   // Subscriptions
   updateUserSubscription(userId: number, data: Partial<{
@@ -669,6 +697,46 @@ export class PgStorage implements IStorage {
     return all.filter(m => m.heirUserId === heirUserId);
   }
 
+  // ── Journal Entries ──────────────────────────────────────────────────────
+  async getJournalEntriesByUser(userId: number, limit = 20, offset = 0): Promise<JournalEntry[]> {
+    const all = await db.select().from(schema.journalEntries)
+      .where(eq(schema.journalEntries.userId, userId))
+      .orderBy(desc(schema.journalEntries.entryDate));
+    return all.slice(offset, offset + limit);
+  }
+  async getJournalEntryById(id: number): Promise<JournalEntry | undefined> {
+    return db.select().from(schema.journalEntries).where(eq(schema.journalEntries.id, id)).then(r => r[0]);
+  }
+  async createJournalEntry(data: InsertJournalEntry): Promise<JournalEntry> {
+    const [entry] = await db.insert(schema.journalEntries).values(data).returning();
+    return entry;
+  }
+  async updateJournalEntry(id: number, data: Partial<InsertJournalEntry>): Promise<JournalEntry | undefined> {
+    const [entry] = await db.update(schema.journalEntries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.journalEntries.id, id))
+      .returning();
+    return entry;
+  }
+  async deleteJournalEntry(id: number): Promise<void> {
+    await db.delete(schema.journalEntries).where(eq(schema.journalEntries.id, id));
+  }
+  async getJournalEntryCountByUser(userId: number): Promise<number> {
+    const all = await db.select().from(schema.journalEntries).where(eq(schema.journalEntries.userId, userId));
+    return all.length;
+  }
+  async getMonthlyReflectionCount(userId: number): Promise<number> {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await client`
+      SELECT COALESCE(SUM(reflection_count), 0) as count
+      FROM journal_entries
+      WHERE user_id = ${userId}
+        AND created_at >= ${firstOfMonth}
+    `;
+    return parseInt(result[0]?.count || "0", 10);
+  }
+
   // ── Persona Data Purge ────────────────────────────────────────────────────
   async deleteAllPersonaData(personaId: number): Promise<void> {
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.personaId, personaId));
@@ -691,6 +759,9 @@ export class PgStorage implements IStorage {
   }
 
   async deleteAllUserData(userId: number): Promise<void> {
+    // Delete journal entries
+    await db.delete(schema.journalEntries).where(eq(schema.journalEntries.userId, userId));
+
     // Get all personas belonging to this user
     const userPersonas = await this.getPersonasByUser(userId);
     const personaIds = userPersonas.map(p => p.id);
