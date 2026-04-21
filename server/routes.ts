@@ -990,6 +990,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         spouse: body.spouse || null,
         children: body.children || null,
         userId: req.user!.id,
+        contributorUserId: req.user!.id,
+        contributorRelationship: "creator",
+        perspectiveType: "self",
       });
       const persona = await storage.createPersona(data);
       res.status(201).json(persona);
@@ -1051,6 +1054,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const data = insertTraitSchema.parse({
         ...req.body,
         personaId: persona.id,
+        contributorUserId: req.user!.id,
+        contributorRelationship: "creator",
+        perspectiveType: "self",
       });
       const trait = await storage.createTrait(data);
       res.status(201).json(trait);
@@ -1064,7 +1070,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const persona = await verifyPersonaOwnership(req, res);
     if (!persona) return;
     const { traits } = req.body as { traits: { category: string; content: string }[] };
-    const created = await storage.bulkReplaceTrait(persona.id, traits.map(t => ({ personaId: persona.id, ...t })));
+    const created = await storage.bulkReplaceTrait(persona.id, traits.map(t => ({
+      personaId: persona.id,
+      ...t,
+      contributorUserId: req.user!.id,
+      contributorRelationship: "creator",
+      perspectiveType: "self",
+    })));
     res.json(created);
   });
 
@@ -1103,6 +1115,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const data = insertMemorySchema.parse({
         ...req.body,
         personaId: persona.id,
+        contributorUserId: req.user!.id,
+        contributorRelationship: "creator",
+        perspectiveType: req.body.documentType === "character" ? "other" : "self",
       });
       const memory = await storage.createMemory(data);
       res.status(201).json(memory);
@@ -1230,6 +1245,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         period: "general",
         tags: null,
         documentType,
+        contributorUserId: req.user!.id,
+        contributorRelationship: "creator",
+        perspectiveType: documentType === "character" ? "other" : "self",
       });
 
       // Only trigger writing style analysis for voice documents (written BY the person)
@@ -1408,7 +1426,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const chatPersonaId = personaId; // future: could use viewerCode-specific thread
 
     // Save user message
-    await storage.addChatMessage({ personaId, role: "user", content: message });
+    await storage.addChatMessage({
+      personaId, role: "user", content: message,
+      contributorUserId: req.user!.id,
+      contributorRelationship: "creator",
+      perspectiveType: "self",
+    });
 
     // Build context
     const persona = await storage.getPersona(personaId);
@@ -1521,7 +1544,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.put("/api/personas/:id/life-story", requireAuth, async (req, res) => {
     const persona = await verifyPersonaOwnership(req, res);
     if (!persona) return;
-    const lifeStory = await storage.upsertLifeStory(persona.id, req.body);
+    const lifeStory = await storage.upsertLifeStory(persona.id, {
+      ...req.body,
+      contributorUserId: req.user!.id,
+      contributorRelationship: "creator",
+      perspectiveType: "self",
+    });
     res.json(lifeStory);
   });
 
@@ -1591,6 +1619,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       isRecurring: isRecurring || false,
       status: "scheduled",
       deliveredAt: null,
+      contributorUserId: req.user!.id,
+      contributorRelationship: "creator",
+      perspectiveType: "self",
     });
     res.status(201).json(milestone);
   });
@@ -1762,6 +1793,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             isRecurring: true,
             status: "scheduled",
             deliveredAt: null,
+            contributorUserId: milestone.contributorUserId,
+            contributorRelationship: milestone.contributorRelationship,
+            perspectiveType: milestone.perspectiveType,
           });
         }
 
@@ -1813,6 +1847,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       name, relationship, personaId: persona.id, accessCode,
       birthYear: birthYear ? parseInt(birthYear) : null,
       note: note || null,
+      contributorUserId: req.user!.id,
+      contributorRelationship: "creator",
+      perspectiveType: "self",
     });
     res.status(201).json(member);
   });
@@ -1887,6 +1924,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       personaId: member.personaId,
       contributedBy: member.name,
       contributorCode: code,
+      contributorRelationship: member.relationship,
+      perspectiveType: "other",
     });
     res.status(201).json(memory);
   });

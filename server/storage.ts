@@ -73,12 +73,18 @@ export async function initDb() {
       passing_date TEXT,
       is_living BOOLEAN DEFAULT TRUE,
       status TEXT NOT NULL DEFAULT 'active',
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
 
   // Add new persona columns if they don't exist
   await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS passing_date TEXT`.catch(() => {});
   await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS is_living BOOLEAN DEFAULT TRUE`.catch(() => {});
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE personas ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS traits (
@@ -86,8 +92,15 @@ export async function initDb() {
       persona_id INTEGER NOT NULL,
       category TEXT NOT NULL,
       content TEXT NOT NULL,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  await client`ALTER TABLE traits ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE traits ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE traits ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS memories (
@@ -101,11 +114,17 @@ export async function initDb() {
       document_type TEXT DEFAULT 'voice',
       contributed_by TEXT,
       contributor_code TEXT,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
 
   // Add new memory columns if they don't exist
   await client`ALTER TABLE memories ADD COLUMN IF NOT EXISTS document_type TEXT DEFAULT 'voice'`.catch(() => {});
+  await client`ALTER TABLE memories ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE memories ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE memories ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS media (
@@ -137,8 +156,15 @@ export async function initDb() {
       wish_for_family TEXT,
       what_to_remember TEXT,
       unfinished_business TEXT,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       updated_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  await client`ALTER TABLE life_story ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE life_story ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE life_story ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS milestone_messages (
@@ -157,6 +183,9 @@ export async function initDb() {
       is_recurring BOOLEAN DEFAULT FALSE,
       status TEXT NOT NULL DEFAULT 'scheduled',
       delivered_at TIMESTAMP,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )`;
@@ -174,6 +203,9 @@ export async function initDb() {
   await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'scheduled'`.catch(() => {});
   await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`.catch(() => {});
   await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE milestone_messages ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS family_members (
@@ -186,12 +218,18 @@ export async function initDb() {
       note TEXT,
       filter_settings TEXT DEFAULT '{}',
       last_active_at TIMESTAMP,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
 
   // Add new family member columns if they don't exist
   await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS birth_year INTEGER`.catch(() => {});
   await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS note TEXT`.catch(() => {});
+  await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS chat_messages (
@@ -199,8 +237,15 @@ export async function initDb() {
       persona_id INTEGER NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  await client`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   await client`
     CREATE TABLE IF NOT EXISTS writing_styles (
@@ -217,9 +262,16 @@ export async function initDb() {
       overall_summary TEXT,
       analyzed_document_count INTEGER DEFAULT 0,
       last_analyzed_at TIMESTAMP,
+      contributor_user_id INTEGER,
+      contributor_relationship TEXT,
+      perspective_type TEXT DEFAULT 'self',
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )`;
+
+  await client`ALTER TABLE writing_styles ADD COLUMN IF NOT EXISTS contributor_user_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE writing_styles ADD COLUMN IF NOT EXISTS contributor_relationship TEXT`.catch(() => {});
+  await client`ALTER TABLE writing_styles ADD COLUMN IF NOT EXISTS perspective_type TEXT DEFAULT 'self'`.catch(() => {});
 
   console.log("Database tables ready");
 }

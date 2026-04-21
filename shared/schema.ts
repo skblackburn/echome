@@ -44,6 +44,9 @@ export const personas = pgTable("personas", {
   passingDate: text("passing_date"),
   isLiving: boolean("is_living").default(true),
   status: text("status").notNull().default("active"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertPersonaSchema = createInsertSchema(personas).omit({ id: true, createdAt: true });
@@ -56,6 +59,9 @@ export const traits = pgTable("traits", {
   personaId: integer("persona_id").notNull(),
   category: text("category").notNull(),
   content: text("content").notNull(),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertTraitSchema = createInsertSchema(traits).omit({ id: true, createdAt: true });
@@ -74,6 +80,9 @@ export const memories = pgTable("memories", {
   documentType: text("document_type").default("voice"),
   contributedBy: text("contributed_by"),
   contributorCode: text("contributor_code"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertMemorySchema = createInsertSchema(memories).omit({ id: true, createdAt: true });
@@ -113,6 +122,9 @@ export const lifeStory = pgTable("life_story", {
   wishForFamily: text("wish_for_family"),
   whatToRemember: text("what_to_remember"),
   unfinshedBusiness: text("unfinished_business"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export const insertLifeStorySchema = createInsertSchema(lifeStory).omit({ id: true, updatedAt: true });
@@ -136,6 +148,9 @@ export const milestoneMessages = pgTable("milestone_messages", {
   isRecurring: boolean("is_recurring").default(false),
   status: text("status").notNull().default("scheduled"),
   deliveredAt: timestamp("delivered_at"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -154,6 +169,9 @@ export const familyMembers = pgTable("family_members", {
   note: text("note"),
   filterSettings: text("filter_settings").default("{}"),
   lastActiveAt: timestamp("last_active_at"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertFamilyMemberSchema = createInsertSchema(familyMembers).omit({ id: true, createdAt: true });
@@ -166,6 +184,9 @@ export const chatMessages = pgTable("chat_messages", {
   personaId: integer("persona_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
@@ -187,6 +208,9 @@ export const writingStyles = pgTable("writing_styles", {
   overallSummary: text("overall_summary"),
   analyzedDocumentCount: integer("analyzed_document_count").default(0),
   lastAnalyzedAt: timestamp("last_analyzed_at"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
