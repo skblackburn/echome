@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  BookOpen, PenLine, Flame, Search, X, Sparkles, ChevronRight,
+  BookOpen, PenLine, Flame, Search, X, Sparkles, ChevronRight, Mic,
 } from "lucide-react";
 import type { JournalEntry } from "@shared/schema";
 
@@ -239,6 +239,11 @@ export default function JournalHome() {
                                 {entry.content.slice(0, 150)}{entry.content.length > 150 ? "…" : ""}
                               </div>
                               <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                {(entry as any).entryType === "voice" && (
+                                  <Badge variant="secondary" className="text-[10px] px-2 py-0 gap-1 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
+                                    <Mic className="h-2.5 w-2.5" /> Voice
+                                  </Badge>
+                                )}
                                 {entry.mood && (
                                   <Badge variant="secondary" className={`text-[10px] px-2 py-0 ${MOOD_COLORS[entry.mood] || ""}`}>
                                     {entry.mood}

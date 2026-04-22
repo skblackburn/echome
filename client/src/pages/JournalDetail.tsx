@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
-  PenLine, Trash2, Sparkles, MessageSquareQuote, BookOpen,
+  PenLine, Trash2, Sparkles, MessageSquareQuote, BookOpen, Mic, RotateCcw, Loader2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
@@ -38,18 +38,33 @@ export default function JournalDetail() {
       if (!res.ok) throw new Error("Failed to load entry");
       return res.json();
     },
+    refetchInterval: (query) => {
+      const data = query.state.data as any;
+      if (data?.transcriptionStatus === "pending") return 3000;
+      return false;
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", `/api/journal/${entryId}`);
-    },
+    mutationFn: async () => { await apiRequest("DELETE", `/api/journal/${entryId}`); },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/journal"] });
       queryClient.invalidateQueries({ queryKey: ["/api/journal/stats"] });
       toast({ title: "Deleted", description: "Journal entry deleted." });
       navigate("/journal");
     },
+  });
+
+  const retranscribeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/journal/${entryId}/retranscribe`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/journal", entryId] });
+      toast({ title: "Retranscribing", description: "Transcription restarted." });
+    },
+    onError: (err: Error) => { toast({ title: "Error", description: err.message, variant: "destructive" }); },
   });
 
   if (isLoading) {
@@ -78,111 +93,70 @@ export default function JournalDetail() {
   }
 
   const dateObj = new Date(entry.entryDate + "T00:00:00");
-  const formattedDate = dateObj.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  const formattedDate = dateObj.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const isVoice = (entry as any).entryType === "voice";
+  const transcriptionStatus = (entry as any).transcriptionStatus as string | undefined;
 
   let reflections: { question: string; timestamp: string }[] = [];
-  if (entry.aiReflections) {
-    try {
-      reflections = JSON.parse(entry.aiReflections);
-    } catch {}
-  }
+  if (entry.aiReflections) { try { reflections = JSON.parse(entry.aiReflections); } catch {} }
 
   return (
-    <Layout
-      backTo="/journal"
-      backLabel="Journal"
-      title="Entry"
-      actions={
-        <Link href={`/journal/${entryId}/edit`}>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-            <PenLine className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
-      }
-    >
+    <Layout backTo="/journal" backLabel="Journal" title="Entry" actions={<Link href={`/journal/${entryId}/edit`}><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"><PenLine className="h-3.5 w-3.5" /></Button></Link>}>
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-        {/* Date & meta */}
         <div className="space-y-2">
           <div className="text-sm text-muted-foreground">{formattedDate}</div>
-          {entry.title && (
-            <h1 className="font-display text-xl font-semibold text-foreground">{entry.title}</h1>
-          )}
+          {entry.title && <h1 className="font-display text-xl font-semibold text-foreground">{entry.title}</h1>}
           <div className="flex items-center gap-2 flex-wrap">
-            {entry.mood && (
-              <Badge variant="secondary" className={`text-xs ${MOOD_COLORS[entry.mood] || ""}`}>
-                {entry.mood}
-              </Badge>
-            )}
-            {entry.includedInEcho && (
-              <Badge variant="outline" className="text-xs gap-1">
-                <Sparkles className="h-2.5 w-2.5" /> Included in Echo
-              </Badge>
-            )}
+            {isVoice && (<Badge variant="secondary" className="text-xs gap-1 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300"><Mic className="h-2.5 w-2.5" /> Voice Entry</Badge>)}
+            {entry.mood && (<Badge variant="secondary" className={`text-xs ${MOOD_COLORS[entry.mood] || ""}`}>{entry.mood}</Badge>)}
+            {entry.includedInEcho && (<Badge variant="outline" className="text-xs gap-1"><Sparkles className="h-2.5 w-2.5" /> Included in Echo</Badge>)}
           </div>
         </div>
 
-        {/* Content */}
-        <div className="text-base text-foreground leading-relaxed whitespace-pre-wrap">
-          {entry.content}
-        </div>
+        {isVoice && (entry as any).audioUrl && (
+          <div className="rounded-xl border border-border bg-card p-4 paper-surface">
+            <audio controls src={`/api/journal/audio/${entryId}`} className="w-full" />
+          </div>
+        )}
 
-        {/* AI Reflections */}
+        {isVoice && transcriptionStatus === "pending" && (
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+            <span className="text-sm text-amber-700 dark:text-amber-300">Transcribing your recording...</span>
+          </div>
+        )}
+        {isVoice && transcriptionStatus === "failed" && (
+          <div className="rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-4 flex items-center justify-between">
+            <span className="text-sm text-red-700 dark:text-red-300">Transcription failed.</span>
+            <Button variant="outline" size="sm" onClick={() => retranscribeMutation.mutate()} disabled={retranscribeMutation.isPending} className="gap-1.5 text-red-600 border-red-300">
+              {retranscribeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}Retry
+            </Button>
+          </div>
+        )}
+
+        <div className="text-base text-foreground leading-relaxed whitespace-pre-wrap">{entry.content}</div>
+
         {reflections.length > 0 && (
           <div className="space-y-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Reflections
-            </div>
+            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Reflections</div>
             {reflections.map((r, i) => (
               <div key={i} className="rounded-xl bg-[#c48585]/5 border border-[#c48585]/20 p-4 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs text-[#c48585] font-medium">
-                  <MessageSquareQuote className="h-3.5 w-3.5" />
-                  Reflection {reflections.length > 1 ? `#${i + 1}` : ""}
-                </div>
-                <p className="text-sm text-foreground/80 italic leading-relaxed">
-                  {r.question}
-                </p>
+                <div className="flex items-center gap-1.5 text-xs text-[#c48585] font-medium"><MessageSquareQuote className="h-3.5 w-3.5" />Reflection {reflections.length > 1 ? `#${i + 1}` : ""}</div>
+                <p className="text-sm text-foreground/80 italic leading-relaxed">{r.question}</p>
               </div>
             ))}
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center gap-3 pt-4 border-t border-border">
-          <Link href={`/journal/${entryId}/edit`}>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <PenLine className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-          </Link>
+          <Link href={`/journal/${entryId}/edit`}><Button variant="outline" size="sm" className="gap-1.5"><PenLine className="h-3.5 w-3.5" />Edit</Button></Link>
           {!showDeleteConfirm ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="text-destructive hover:text-destructive/80 gap-1.5"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(true)} className="text-destructive hover:text-destructive/80 gap-1.5"><Trash2 className="h-3.5 w-3.5" />Delete</Button>
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-xs text-destructive">Delete this entry?</span>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? "Deleting…" : "Yes, delete"}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(false)}>
-                Cancel
-              </Button>
+              <Button variant="destructive" size="sm" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "Deleting\u2026" : "Yes, delete"}</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
             </div>
           )}
         </div>
