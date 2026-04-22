@@ -171,6 +171,46 @@ export async function sendTransferExecutedEmail(
   });
 }
 
+export async function sendLetterDeliveryEmail(
+  recipientEmail: string,
+  recipientName: string | null,
+  authorName: string,
+  letterTitle: string,
+  letterContent: string,
+  writtenAt: Date,
+  letterId: number,
+): Promise<void> {
+  const greeting = recipientName ? `Dear ${recipientName}` : "Hello";
+  const writtenDate = writtenAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#3d2e24;font-family:Georgia,'Times New Roman',serif;">
+      ${greeting},
+    </h2>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      A letter from <strong>${authorName}</strong> has arrived — it was written on ${writtenDate} and scheduled to reach you today.
+    </p>
+    <div style="margin:20px 0;padding:20px 24px;border-left:3px solid #8b5e6b;background-color:#faf7f4;border-radius:0 8px 8px 0;">
+      <h3 style="margin:0 0 12px;font-size:17px;font-weight:600;color:#3d2e24;font-family:Georgia,'Times New Roman',serif;">
+        ${letterTitle}
+      </h3>
+      <div style="margin:0;font-size:14px;line-height:1.7;color:#5c4a3f;white-space:pre-wrap;">${letterContent}</div>
+    </div>
+    <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#9a8d82;font-style:italic;">
+      This message was written on ${writtenDate} and scheduled to arrive today.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${APP_URL}/#/letters/inbox" style="display:inline-block;padding:12px 32px;background-color:#8b5e6b;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+        View in Echo Me
+      </a>
+    </div>`;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: `A letter from ${authorName} — scheduled for today`,
+    html: emailLayout(content),
+  });
+}
+
 export async function sendHeirClaimedEmail(
   recipientEmail: string,
   recipientName: string | null,

@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, serial, date } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, serial, date, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -268,9 +268,67 @@ export const journalEntries = pgTable("journal_entries", {
   linkedMemoryId: integer("linked_memory_id"),
   reflectionCount: integer("reflection_count").notNull().default(0),
   aiReflections: text("ai_reflections"),
+  audioUrl: text("audio_url"),
+  audioDurationSeconds: integer("audio_duration_seconds"),
+  transcriptionStatus: text("transcription_status").default("none"),
+  entryType: text("entry_type").default("text"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
 export type JournalEntry = typeof journalEntries.$inferSelect;
+
+// ─── Future Letters ─────────────────────────────────────────────────────────
+export const futureLetters = pgTable("future_letters", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  recipientType: text("recipient_type").notNull(), // 'self', 'heir', 'custom_email'
+  recipientUserId: integer("recipient_user_id"),
+  recipientHeirId: integer("recipient_heir_id"),
+  recipientName: text("recipient_name"),
+  recipientEmail: text("recipient_email"),
+  deliverAt: timestamp("deliver_at").notNull(),
+  deliveredAt: timestamp("delivered_at"),
+  status: text("status").notNull().default("scheduled"), // 'scheduled', 'delivered', 'cancelled', 'failed'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertFutureLetterSchema = createInsertSchema(futureLetters).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertFutureLetter = z.infer<typeof insertFutureLetterSchema>;
+export type FutureLetter = typeof futureLetters.$inferSelect;
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // 'letter_delivered', etc.
+  title: text("title").notNull(),
+  message: text("message"),
+  referenceId: integer("reference_id"),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
+// ─── Photo Memories ────────────────────────────────────────────────────────
+export const photoMemories = pgTable("photo_memories", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  personaId: integer("persona_id").notNull(),
+  photoUrl: text("photo_url").notNull(),
+  photoThumbnailUrl: text("photo_thumbnail_url"),
+  aiPrompts: jsonb("ai_prompts"), // array of generated questions
+  userResponses: jsonb("user_responses"), // array of {question, answer} pairs
+  status: text("status").notNull().default("draft"),
+  linkedMemoryId: integer("linked_memory_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertPhotoMemorySchema = createInsertSchema(photoMemories).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPhotoMemory = z.infer<typeof insertPhotoMemorySchema>;
+export type PhotoMemory = typeof photoMemories.$inferSelect;

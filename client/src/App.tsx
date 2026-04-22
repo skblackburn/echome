@@ -34,6 +34,10 @@ import Register from "@/pages/Register";
 import Faq from "@/pages/Faq";
 import Privacy from "@/pages/Privacy";
 import ClaimEcho from "@/pages/ClaimEcho";
+import Letters from "@/pages/Letters";
+import LetterNew from "@/pages/LetterNew";
+import LetterDetail from "@/pages/LetterDetail";
+import LetterInbox from "@/pages/LetterInbox";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated, or to reactivate if cancelled
@@ -99,6 +103,10 @@ function AppRoutes() {
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
         <Route path="/persona/:id/documents">{() => <ProtectedRoute component={DocumentLibrary} />}</Route>
+        <Route path="/letters">{() => <ProtectedRoute component={Letters} />}</Route>
+        <Route path="/letters/new">{() => <ProtectedRoute component={LetterNew} />}</Route>
+        <Route path="/letters/inbox">{() => <ProtectedRoute component={LetterInbox} />}</Route>
+        <Route path="/letters/:id">{() => <ProtectedRoute component={LetterDetail} />}</Route>
         <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
         <Route path="/reactivate">{() => <ProtectedRoute component={Reactivate} allowCancelled />}</Route>
 
