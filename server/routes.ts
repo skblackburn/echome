@@ -15,7 +15,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import Stripe from "stripe";
 import { storage, db } from "./storage";
-import { sendWelcomeEmail, sendHeirInvitationEmail, sendTransferExecutedEmail, sendHeirClaimedEmail } from "./email";
+import { sendWelcomeEmail, sendHeirInvitationEmail, sendTransferExecutedEmail, sendHeirClaimedEmail, sendLetterDeliveryEmail } from "./email";
 import {
   insertPersonaSchema,
   insertTraitSchema,
@@ -37,11 +37,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 const APP_URL = process.env.APP_URL || "https://echome-production-a33e.up.railway.app";
 
 // Plan limits configuration
-const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null; heirs: number; reflections: number | null }> = {
-  free: { echoes: 1, messages: 20, milestones: 1, heirs: 1, reflections: 3 },
-  personal: { echoes: 1, messages: null, milestones: 5, heirs: 3, reflections: null },
-  family: { echoes: 5, messages: null, milestones: 15, heirs: 5, reflections: null },
-  legacy: { echoes: 10, messages: null, milestones: null, heirs: 10, reflections: null },
+const PLAN_LIMITS: Record<string, { echoes: number; messages: number | null; milestones: number | null; heirs: number; reflections: number | null; voiceEntries: number | null; photoMemories: number | null }> = {
+  free: { echoes: 1, messages: 20, milestones: 1, heirs: 1, reflections: 3, voiceEntries: 5, photoMemories: 3 },
+  personal: { echoes: 1, messages: null, milestones: 5, heirs: 3, reflections: null, voiceEntries: null, photoMemories: null },
+  family: { echoes: 5, messages: null, milestones: 15, heirs: 5, reflections: null, voiceEntries: null, photoMemories: null },
+  legacy: { echoes: 10, messages: null, milestones: null, heirs: 10, reflections: null, voiceEntries: null, photoMemories: null },
 };
 
 // Map Stripe price IDs to plan info
@@ -78,6 +78,32 @@ const upload = multer({
     },
   }),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+});
+
+// Configure multer for voice journal audio uploads
+const ALLOWED_AUDIO_TYPES = ["audio/mp3", "audio/mpeg", "audio/m4a", "audio/mp4", "audio/wav", "audio/wave", "audio/webm", "audio/ogg"];
+const audioUploadDir = path.join(process.cwd(), "uploads/journal-audio");
+if (!fs.existsSync(audioUploadDir)) fs.mkdirSync(audioUploadDir, { recursive: true });
+
+const audioUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, audioUploadDir);
+    },
+    filename: (_req, file, cb) => {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = path.extname(file.originalname) || ".webm";
+      cb(null, `${unique}${ext}`);
+    },
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB (Whisper limit)
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_AUDIO_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Invalid audio format. Supported: mp3, m4a, wav, webm, ogg"));
+    }
+  },
 });
 
 // OpenAI client (gracefully handle missing key)
@@ -2943,6 +2969,590 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("AI reflection error:", err);
       res.status(500).json({ error: "Failed to generate reflection" });
     }
+  });
+
+  // ── Voice Journal: upload audio ──────────────────────────────────────────
+  app.post("/api/journal/voice", requireAuth, audioUpload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const user = await storage.getUserById(userId);
+      const plan = user?.plan || "free";
+
+      // Tier limit check
+      const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+      if (limits.voiceEntries !== null) {
+        const monthlyVoice = await storage.getMonthlyVoiceEntryCount(userId);
+        if (monthlyVoice >= limits.voiceEntries) {
+          // Clean up uploaded file
+          if (req.file) fs.unlinkSync(req.file.path);
+          return res.status(403).json({
+            error: `You've used all ${limits.voiceEntries} voice entries this month. Upgrade for unlimited voice journaling.`,
+            code: "VOICE_LIMIT",
+            used: monthlyVoice,
+            limit: limits.voiceEntries,
+            plan,
+          });
+        }
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No audio file uploaded" });
+      }
+
+      // Move file to user-specific directory
+      const userDir = path.join(process.cwd(), "uploads/journal-audio", String(userId));
+      if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+      const finalPath = path.join(userDir, req.file.filename);
+      fs.renameSync(req.file.path, finalPath);
+
+      const audioUrl = `/uploads/journal-audio/${userId}/${req.file.filename}`;
+      const durationSeconds = req.body.duration ? parseInt(req.body.duration) : null;
+      const today = new Date().toISOString().split("T")[0];
+
+      // Create entry with pending transcription
+      const entry = await storage.createJournalEntry({
+        userId,
+        title: req.body.title || null,
+        content: "(Transcribing...)",
+        entryDate: req.body.entryDate || today,
+        mood: req.body.mood || null,
+        includedInEcho: false,
+        echoPersonaId: null,
+        linkedMemoryId: null,
+        reflectionCount: 0,
+        aiReflections: null,
+        audioUrl,
+        audioDurationSeconds: durationSeconds,
+        transcriptionStatus: "pending",
+        entryType: "voice",
+      });
+
+      // Return entry immediately, transcribe async
+      res.json(entry);
+
+      // Async transcription
+      if (openai) {
+        try {
+          const audioStream = fs.createReadStream(finalPath);
+          const transcription = await openai.audio.transcriptions.create({
+            model: "whisper-1",
+            file: audioStream,
+          });
+          const transcript = transcription.text || "";
+          await storage.updateJournalEntry(entry.id, {
+            content: transcript,
+            transcriptionStatus: "completed",
+          });
+
+          // If the user wanted to include in Echo (passed via body)
+          if (req.body.includedInEcho === "true" && req.body.echoPersonaId) {
+            const personaId = parseInt(req.body.echoPersonaId);
+            const persona = await storage.getPersona(personaId);
+            if (persona && persona.userId === userId && transcript.trim()) {
+              const memory = await storage.createMemory({
+                personaId,
+                type: "document",
+                title: req.body.title || `Voice Journal: ${entry.entryDate}`,
+                content: transcript.trim(),
+                period: null,
+                tags: null,
+                documentType: "voice",
+                contributedBy: null,
+                contributorCode: null,
+                contributorUserId: userId,
+                contributorRelationship: "self",
+                perspectiveType: "self",
+              });
+              await storage.updateJournalEntry(entry.id, {
+                includedInEcho: true,
+                echoPersonaId: personaId,
+                linkedMemoryId: memory.id,
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Whisper transcription error:", err);
+          await storage.updateJournalEntry(entry.id, {
+            content: "(Transcription failed)",
+            transcriptionStatus: "failed",
+          });
+        }
+      } else {
+        // No OpenAI client — mark as failed
+        await storage.updateJournalEntry(entry.id, {
+          content: "(Transcription unavailable — OpenAI not configured)",
+          transcriptionStatus: "failed",
+        });
+      }
+    } catch (err: any) {
+      console.error("Voice upload error:", err);
+      res.status(500).json({ error: err.message || "Voice upload failed" });
+    }
+  });
+
+  // ── Voice Journal: serve audio file ──────────────────────────────────────
+  app.get("/api/journal/audio/:entryId", requireAuth, async (req, res) => {
+    const entryId = parseInt(req.params.entryId);
+    if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    const entry = await storage.getJournalEntryById(entryId);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    if (!entry.audioUrl) return res.status(404).json({ error: "No audio for this entry" });
+
+    const filePath = path.join(process.cwd(), entry.audioUrl);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Audio file not found" });
+
+    res.sendFile(filePath);
+  });
+
+  // ── Voice Journal: retranscribe ──────────────────────────────────────────
+  app.post("/api/journal/:id/retranscribe", requireAuth, async (req, res) => {
+    const entryId = parseInt(req.params.id);
+    if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    const entry = await storage.getJournalEntryById(entryId);
+    if (!entry) return res.status(404).json({ error: "Entry not found" });
+    if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    if (!entry.audioUrl) return res.status(400).json({ error: "No audio file to transcribe" });
+    if (!openai) return res.status(503).json({ error: "Transcription service not available" });
+
+    const filePath = path.join(process.cwd(), entry.audioUrl);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Audio file not found" });
+
+    await storage.updateJournalEntry(entryId, { transcriptionStatus: "pending" });
+
+    try {
+      const audioStream = fs.createReadStream(filePath);
+      const transcription = await openai.audio.transcriptions.create({
+        model: "whisper-1",
+        file: audioStream,
+      });
+      const transcript = transcription.text || "";
+      const updated = await storage.updateJournalEntry(entryId, {
+        content: transcript,
+        transcriptionStatus: "completed",
+      });
+
+      // Update linked memory if exists
+      if (entry.linkedMemoryId && transcript.trim()) {
+        await storage.updateMemory(entry.linkedMemoryId, { content: transcript.trim() });
+      }
+
+      res.json(updated);
+    } catch (err) {
+      console.error("Retranscribe error:", err);
+      await storage.updateJournalEntry(entryId, { transcriptionStatus: "failed" });
+      res.status(500).json({ error: "Retranscription failed" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LETTERS TO THE FUTURE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Create letter
+  app.post("/api/letters", requireAuth, async (req, res) => {
+    try {
+      const { title, content, recipientType, recipientUserId, recipientHeirId, recipientName, recipientEmail, deliverAt } = req.body;
+
+      if (!title || !content || !recipientType || !deliverAt) {
+        return res.status(400).json({ error: "title, content, recipientType, and deliverAt are required" });
+      }
+
+      if (!["self", "heir", "custom_email"].includes(recipientType)) {
+        return res.status(400).json({ error: "recipientType must be 'self', 'heir', or 'custom_email'" });
+      }
+
+      const deliverDate = new Date(deliverAt);
+      if (isNaN(deliverDate.getTime())) {
+        return res.status(400).json({ error: "Invalid deliverAt date" });
+      }
+      if (deliverDate <= new Date()) {
+        return res.status(400).json({ error: "deliverAt must be in the future" });
+      }
+      const maxDate = new Date();
+      maxDate.setFullYear(maxDate.getFullYear() + 100);
+      if (deliverDate > maxDate) {
+        return res.status(400).json({ error: "deliverAt cannot be more than 100 years in the future" });
+      }
+
+      // Resolve recipient email for self
+      let resolvedEmail = recipientEmail || null;
+      let resolvedUserId = recipientUserId || null;
+      if (recipientType === "self") {
+        const user = await storage.getUserById(req.user!.id);
+        resolvedEmail = user?.email || null;
+        resolvedUserId = req.user!.id;
+      } else if (recipientType === "heir" && recipientHeirId) {
+        const heir = await storage.getHeirById(recipientHeirId);
+        if (heir) {
+          resolvedEmail = heir.heirEmail;
+          resolvedUserId = heir.heirUserId || null;
+        }
+      }
+
+      const letter = await storage.createFutureLetter({
+        userId: req.user!.id,
+        title,
+        content,
+        recipientType,
+        recipientUserId: resolvedUserId,
+        recipientHeirId: recipientHeirId || null,
+        recipientName: recipientName || null,
+        recipientEmail: resolvedEmail,
+        deliverAt: deliverDate,
+        deliveredAt: null,
+        status: "scheduled",
+      });
+
+      res.status(201).json(letter);
+    } catch (err) {
+      console.error("Create letter error:", err);
+      res.status(500).json({ error: "Failed to create letter" });
+    }
+  });
+
+  // List user's letters
+  app.get("/api/letters", requireAuth, async (req, res) => {
+    const letters = await storage.getFutureLettersByUser(req.user!.id);
+    res.json(letters);
+  });
+
+  // Get letters inbox (delivered to current user)
+  app.get("/api/letters/inbox", requireAuth, async (req, res) => {
+    const letters = await storage.getLettersInbox(req.user!.id);
+    res.json(letters);
+  });
+
+  // Get single letter
+  app.get("/api/letters/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid letter ID" });
+
+    const letter = await storage.getFutureLetterById(id);
+    if (!letter) return res.status(404).json({ error: "Letter not found" });
+
+    // Author can always see their letters; recipients can see after delivery
+    const isAuthor = letter.userId === req.user!.id;
+    const isRecipient = letter.recipientUserId === req.user!.id;
+    const user = await storage.getUserById(req.user!.id);
+    const isEmailRecipient = user?.email && letter.recipientEmail?.toLowerCase() === user.email.toLowerCase();
+
+    if (!isAuthor && !(isRecipient || isEmailRecipient)) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Recipients can only see delivered letters
+    if (!isAuthor && letter.status !== "delivered") {
+      return res.status(403).json({ error: "Letter not yet delivered" });
+    }
+
+    res.json(letter);
+  });
+
+  // Update letter (only while scheduled)
+  app.put("/api/letters/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid letter ID" });
+
+    const letter = await storage.getFutureLetterById(id);
+    if (!letter) return res.status(404).json({ error: "Letter not found" });
+    if (letter.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    if (letter.status !== "scheduled") return res.status(400).json({ error: "Can only edit scheduled letters" });
+
+    const { title, content, recipientType, recipientUserId, recipientHeirId, recipientName, recipientEmail, deliverAt } = req.body;
+
+    if (deliverAt) {
+      const deliverDate = new Date(deliverAt);
+      if (isNaN(deliverDate.getTime())) return res.status(400).json({ error: "Invalid deliverAt date" });
+      if (deliverDate <= new Date()) return res.status(400).json({ error: "deliverAt must be in the future" });
+      const maxDate = new Date();
+      maxDate.setFullYear(maxDate.getFullYear() + 100);
+      if (deliverDate > maxDate) return res.status(400).json({ error: "deliverAt cannot be more than 100 years in the future" });
+    }
+
+    const updates: any = {};
+    if (title !== undefined) updates.title = title;
+    if (content !== undefined) updates.content = content;
+    if (recipientType !== undefined) updates.recipientType = recipientType;
+    if (recipientUserId !== undefined) updates.recipientUserId = recipientUserId;
+    if (recipientHeirId !== undefined) updates.recipientHeirId = recipientHeirId;
+    if (recipientName !== undefined) updates.recipientName = recipientName;
+    if (recipientEmail !== undefined) updates.recipientEmail = recipientEmail;
+    if (deliverAt !== undefined) updates.deliverAt = new Date(deliverAt);
+
+    // Re-resolve email for self type
+    if (updates.recipientType === "self" || (!updates.recipientType && letter.recipientType === "self")) {
+      const user = await storage.getUserById(req.user!.id);
+      updates.recipientEmail = user?.email || null;
+      updates.recipientUserId = req.user!.id;
+    }
+
+    const updated = await storage.updateFutureLetter(id, updates);
+    res.json(updated);
+  });
+
+  // Cancel/delete letter (only while scheduled)
+  app.delete("/api/letters/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid letter ID" });
+
+    const letter = await storage.getFutureLetterById(id);
+    if (!letter) return res.status(404).json({ error: "Letter not found" });
+    if (letter.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    if (letter.status !== "scheduled") return res.status(400).json({ error: "Can only cancel scheduled letters" });
+
+    await storage.updateFutureLetter(id, { status: "cancelled" } as any);
+    res.json({ success: true });
+  });
+
+  // Get unread notification count for letters
+  app.get("/api/letters/notifications/unread", requireAuth, async (req, res) => {
+    const count = await storage.getUnreadNotificationCount(req.user!.id);
+    res.json({ count });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHOTO MEMORIES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Configure multer for photo memory uploads (jpg/png/webp, max 10MB)
+  const photoUploadDir = path.join(process.cwd(), "uploads/photo-memories");
+  if (!fs.existsSync(photoUploadDir)) fs.mkdirSync(photoUploadDir, { recursive: true });
+
+  const photoUpload = multer({
+    storage: multer.diskStorage({
+      destination: (req: any, _file: any, cb: any) => {
+        const userId = req.user?.id || "unknown";
+        const userDir = path.join(photoUploadDir, String(userId));
+        if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+        cb(null, userDir);
+      },
+      filename: (_req: any, file: any, cb: any) => {
+        const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+        const ext = path.extname(file.originalname);
+        cb(null, `${unique}${ext}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req: any, file: any, cb: any) => {
+      const allowed = ["image/jpeg", "image/png", "image/webp"];
+      if (allowed.includes(file.mimetype)) cb(null, true);
+      else cb(new Error("Only jpg, png, and webp images are allowed"));
+    },
+  });
+
+  // POST /api/photo-memories — upload photo, generate AI questions
+  app.post("/api/photo-memories", requireAuth, photoUpload.single("photo"), async (req, res) => {
+    const userId = req.user!.id;
+    const personaId = parseInt(req.body.personaId);
+    if (isNaN(personaId)) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: "personaId is required" });
+    }
+
+    // Verify persona ownership
+    const persona = await storage.getPersona(personaId);
+    if (!persona || persona.userId !== userId) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    if (!req.file) return res.status(400).json({ error: "No photo uploaded" });
+
+    // Tier limit check (free = 3 lifetime)
+    const user = await storage.getUserById(userId);
+    const plan = user?.plan || "free";
+    const limits = PLAN_LIMITS[plan];
+    if (limits.photoMemories !== null) {
+      const count = await storage.getPhotoMemoryCountByUser(userId);
+      if (count >= limits.photoMemories) {
+        fs.unlinkSync(req.file.path);
+        return res.status(403).json({
+          error: `Photo memory limit (${limits.photoMemories}) reached on the ${plan} plan. Upgrade to create more.`,
+          code: "PHOTO_MEMORY_LIMIT",
+          current: count,
+          limit: limits.photoMemories,
+          plan,
+        });
+      }
+    }
+
+    const photoUrl = `/uploads/photo-memories/${userId}/${req.file.filename}`;
+
+    // Generate AI questions from the photo
+    let aiPrompts: string[] = [];
+    try {
+      if (openai) {
+        const imageBuffer = fs.readFileSync(req.file.path);
+        const base64 = imageBuffer.toString("base64");
+        const mimeType = req.file.mimetype || "image/jpeg";
+
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Look at this photo. The user wants to preserve memories about it. Generate 4-5 thoughtful, open-ended questions that would help them describe what was happening, who's in it, and why it's meaningful. Avoid yes/no questions. Return a JSON object with a \"questions\" key containing an array of question strings.",
+              },
+              {
+                type: "image_url",
+                image_url: { url: `data:${mimeType};base64,${base64}` },
+              },
+            ],
+          }],
+          response_format: { type: "json_object" },
+          max_tokens: 500,
+        });
+
+        const content = completion.choices[0]?.message?.content;
+        if (content) {
+          const parsed = JSON.parse(content);
+          aiPrompts = parsed.questions || parsed.prompts || [];
+        }
+      }
+    } catch (err) {
+      console.error("Vision API error:", err);
+    }
+
+    // Fallback questions if AI didn't work
+    if (aiPrompts.length === 0) {
+      aiPrompts = [
+        "What was happening when this photo was taken?",
+        "Who is in this photo and what is your relationship to them?",
+        "What emotions does this photo bring up for you?",
+        "Why is this moment meaningful to you?",
+        "What details in this photo stand out most to you?",
+      ];
+    }
+
+    const photoMemory = await storage.createPhotoMemory({
+      userId,
+      personaId,
+      photoUrl,
+      aiPrompts,
+      userResponses: null,
+      status: "draft",
+      linkedMemoryId: null,
+    });
+
+    res.status(201).json(photoMemory);
+  });
+
+  // GET /api/photo-memories/limits — tier limit info (must be before /:id)
+  app.get("/api/photo-memories/limits", requireAuth, async (req, res) => {
+    const user = await storage.getUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const plan = user.plan || "free";
+    const limits = PLAN_LIMITS[plan];
+    const count = await storage.getPhotoMemoryCountByUser(user.id);
+    res.json({
+      plan,
+      limit: limits.photoMemories,
+      current: count,
+      remaining: limits.photoMemories === null ? null : Math.max(0, limits.photoMemories - count),
+    });
+  });
+
+  // PUT /api/photo-memories/:id — save responses & complete
+  app.put("/api/photo-memories/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+    const photoMemory = await storage.getPhotoMemoryById(id);
+    if (!photoMemory) return res.status(404).json({ error: "Not found" });
+    if (photoMemory.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const { userResponses, status } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (userResponses !== undefined) updates.userResponses = userResponses;
+
+    if (status === "complete") {
+      updates.status = "complete";
+
+      // Create a linked memory document for the persona
+      const responses = userResponses || photoMemory.userResponses || [];
+      const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      let memoryContent = `Photo memory — ${date}\n[photo attached: ${photoMemory.photoUrl}]\n\n`;
+      for (const r of responses as Array<{ question: string; answer: string }>) {
+        if (r.question && r.answer) {
+          memoryContent += `Q: ${r.question}\nA: ${r.answer}\n\n`;
+        }
+      }
+
+      const memory = await storage.createMemory({
+        personaId: photoMemory.personaId,
+        type: "document",
+        title: `Photo memory — ${date}`,
+        content: memoryContent.trim(),
+        period: "general",
+        tags: null,
+        documentType: "character",
+        contributorUserId: req.user!.id,
+        contributorRelationship: "creator",
+        perspectiveType: "self",
+      });
+
+      updates.linkedMemoryId = memory.id;
+    }
+
+    const updated = await storage.updatePhotoMemory(id, updates as any);
+    res.json(updated);
+  });
+
+  // GET /api/photo-memories — list user's photo memories (with optional persona filter)
+  app.get("/api/photo-memories", requireAuth, async (req, res) => {
+    const all = await storage.getPhotoMemoriesByUser(req.user!.id);
+    const personaId = req.query.personaId ? parseInt(req.query.personaId as string) : null;
+    const filtered = personaId ? all.filter(pm => pm.personaId === personaId) : all;
+    res.json(filtered);
+  });
+
+  // GET /api/photo-memories/:id — single photo memory
+  app.get("/api/photo-memories/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    const pm = await storage.getPhotoMemoryById(id);
+    if (!pm) return res.status(404).json({ error: "Not found" });
+    if (pm.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+    res.json(pm);
+  });
+
+  // GET /api/photo-memories/photo/:id — serve photo with auth
+  app.get("/api/photo-memories/photo/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    const pm = await storage.getPhotoMemoryById(id);
+    if (!pm) return res.status(404).json({ error: "Not found" });
+    if (pm.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    const filePath = path.join(process.cwd(), pm.photoUrl);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Photo file not found" });
+    res.sendFile(filePath);
+  });
+
+  // DELETE /api/photo-memories/:id — delete photo memory (and linked memory doc)
+  app.delete("/api/photo-memories/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    const pm = await storage.getPhotoMemoryById(id);
+    if (!pm) return res.status(404).json({ error: "Not found" });
+    if (pm.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+
+    // Delete linked memory document if exists
+    if (pm.linkedMemoryId) {
+      await storage.deleteMemory(pm.linkedMemoryId);
+    }
+
+    // Delete photo file
+    const filePath = path.join(process.cwd(), pm.photoUrl);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+    await storage.deletePhotoMemory(id);
+    res.json({ success: true });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, lte } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type {
   Persona, InsertPersona,
@@ -15,6 +15,9 @@ import type {
   EchoHeir, InsertEchoHeir,
   EchoTransfer, InsertEchoTransfer,
   JournalEntry, InsertJournalEntry,
+  FutureLetter, InsertFutureLetter,
+  Notification, InsertNotification,
+  PhotoMemory, InsertPhotoMemory,
   User,
 } from "@shared/schema";
 
@@ -323,6 +326,64 @@ export async function initDb() {
       linked_memory_id INTEGER,
       reflection_count INTEGER NOT NULL DEFAULT 0,
       ai_reflections TEXT,
+      audio_url TEXT,
+      audio_duration_seconds INTEGER,
+      transcription_status TEXT DEFAULT 'none',
+      entry_type TEXT DEFAULT 'text',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+  // Voice journaling columns (idempotent migration for existing DBs)
+  await client`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS audio_url TEXT`.catch(() => {});
+  await client`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS audio_duration_seconds INTEGER`.catch(() => {});
+  await client`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS transcription_status TEXT DEFAULT 'none'`.catch(() => {});
+  await client`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS entry_type TEXT DEFAULT 'text'`.catch(() => {});
+
+  // ── Future Letters ─────────────────────────────────────────────────────
+  await client`
+    CREATE TABLE IF NOT EXISTS future_letters (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      recipient_type TEXT NOT NULL,
+      recipient_user_id INTEGER,
+      recipient_heir_id INTEGER,
+      recipient_name TEXT,
+      recipient_email TEXT,
+      deliver_at TIMESTAMP NOT NULL,
+      delivered_at TIMESTAMP,
+      status TEXT NOT NULL DEFAULT 'scheduled',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+  // ── Notifications ──────────────────────────────────────────────────────
+  await client`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      reference_id INTEGER,
+      read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+  // ── Photo Memories ─────────────────────────────────────────────────────
+  await client`
+    CREATE TABLE IF NOT EXISTS photo_memories (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      persona_id INTEGER NOT NULL,
+      photo_url TEXT NOT NULL,
+      photo_thumbnail_url TEXT,
+      ai_prompts JSONB,
+      user_responses JSONB,
+      status TEXT NOT NULL DEFAULT 'draft',
+      linked_memory_id INTEGER,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )`;
@@ -431,6 +492,29 @@ export interface IStorage {
   deleteJournalEntry(id: number): Promise<void>;
   getJournalEntryCountByUser(userId: number): Promise<number>;
   getMonthlyReflectionCount(userId: number): Promise<number>;
+
+  // Future Letters
+  createFutureLetter(data: InsertFutureLetter): Promise<FutureLetter>;
+  getFutureLettersByUser(userId: number): Promise<FutureLetter[]>;
+  getFutureLetterById(id: number): Promise<FutureLetter | undefined>;
+  updateFutureLetter(id: number, data: Partial<InsertFutureLetter>): Promise<FutureLetter | undefined>;
+  deleteFutureLetter(id: number): Promise<void>;
+  getDueLetters(): Promise<FutureLetter[]>;
+  getLettersInbox(userId: number): Promise<FutureLetter[]>;
+
+  // Notifications
+  createNotification(data: InsertNotification): Promise<Notification>;
+  getNotificationsByUser(userId: number): Promise<Notification[]>;
+  getUnreadNotificationCount(userId: number): Promise<number>;
+  markNotificationRead(id: number): Promise<void>;
+
+  // Photo Memories
+  getPhotoMemoriesByUser(userId: number): Promise<PhotoMemory[]>;
+  getPhotoMemoryById(id: number): Promise<PhotoMemory | undefined>;
+  getPhotoMemoryCountByUser(userId: number): Promise<number>;
+  createPhotoMemory(data: InsertPhotoMemory): Promise<PhotoMemory>;
+  updatePhotoMemory(id: number, data: Partial<InsertPhotoMemory>): Promise<PhotoMemory | undefined>;
+  deletePhotoMemory(id: number): Promise<void>;
 
   // Subscriptions
   updateUserSubscription(userId: number, data: Partial<{
@@ -736,6 +820,96 @@ export class PgStorage implements IStorage {
     `;
     return parseInt(result[0]?.count || "0", 10);
   }
+  async getMonthlyVoiceEntryCount(userId: number): Promise<number> {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const result = await client`
+      SELECT COUNT(*) as count
+      FROM journal_entries
+      WHERE user_id = ${userId}
+        AND entry_type = 'voice'
+        AND created_at >= ${firstOfMonth}
+    `;
+    return parseInt(result[0]?.count || "0", 10);
+  }
+
+  // ── Future Letters ───────────────────────────────────────────────────────
+  async createFutureLetter(data: InsertFutureLetter): Promise<FutureLetter> {
+    const [letter] = await db.insert(schema.futureLetters).values(data).returning();
+    return letter;
+  }
+  async getFutureLettersByUser(userId: number): Promise<FutureLetter[]> {
+    return db.select().from(schema.futureLetters).where(eq(schema.futureLetters.userId, userId)).orderBy(desc(schema.futureLetters.createdAt));
+  }
+  async getFutureLetterById(id: number): Promise<FutureLetter | undefined> {
+    return db.select().from(schema.futureLetters).where(eq(schema.futureLetters.id, id)).then(r => r[0]);
+  }
+  async updateFutureLetter(id: number, data: Partial<InsertFutureLetter>): Promise<FutureLetter | undefined> {
+    const [letter] = await db.update(schema.futureLetters).set({ ...data, updatedAt: new Date() }).where(eq(schema.futureLetters.id, id)).returning();
+    return letter;
+  }
+  async deleteFutureLetter(id: number): Promise<void> {
+    await db.delete(schema.futureLetters).where(eq(schema.futureLetters.id, id));
+  }
+  async getDueLetters(): Promise<FutureLetter[]> {
+    return db.select().from(schema.futureLetters)
+      .where(and(eq(schema.futureLetters.status, "scheduled"), lte(schema.futureLetters.deliverAt, new Date())));
+  }
+  async getLettersInbox(userId: number): Promise<FutureLetter[]> {
+    // Letters delivered to this user (recipient_user_id matches) or to their email
+    const user = await this.getUserById(userId);
+    if (!user) return [];
+    const all = await db.select().from(schema.futureLetters).where(eq(schema.futureLetters.status, "delivered"));
+    return all.filter(l =>
+      l.recipientUserId === userId ||
+      (l.recipientType === "self" && l.userId === userId) ||
+      (user.email && l.recipientEmail?.toLowerCase() === user.email.toLowerCase())
+    ).sort((a, b) => {
+      const da = a.deliveredAt?.getTime() || 0;
+      const db2 = b.deliveredAt?.getTime() || 0;
+      return db2 - da;
+    });
+  }
+
+  // ── Notifications ──────────────────────────────────────────────────────
+  async createNotification(data: InsertNotification): Promise<Notification> {
+    const [n] = await db.insert(schema.notifications).values(data).returning();
+    return n;
+  }
+  async getNotificationsByUser(userId: number): Promise<Notification[]> {
+    return db.select().from(schema.notifications).where(eq(schema.notifications.userId, userId)).orderBy(desc(schema.notifications.createdAt));
+  }
+  async getUnreadNotificationCount(userId: number): Promise<number> {
+    const all = await db.select().from(schema.notifications)
+      .where(and(eq(schema.notifications.userId, userId), eq(schema.notifications.read, false)));
+    return all.length;
+  }
+  async markNotificationRead(id: number): Promise<void> {
+    await db.update(schema.notifications).set({ read: true }).where(eq(schema.notifications.id, id));
+  }
+
+  // ── Photo Memories ──────────────────────────────────────────────────────
+  async getPhotoMemoriesByUser(userId: number): Promise<PhotoMemory[]> {
+    return db.select().from(schema.photoMemories).where(eq(schema.photoMemories.userId, userId)).orderBy(desc(schema.photoMemories.createdAt));
+  }
+  async getPhotoMemoryById(id: number): Promise<PhotoMemory | undefined> {
+    return db.select().from(schema.photoMemories).where(eq(schema.photoMemories.id, id)).then(r => r[0]);
+  }
+  async getPhotoMemoryCountByUser(userId: number): Promise<number> {
+    const all = await db.select().from(schema.photoMemories).where(eq(schema.photoMemories.userId, userId));
+    return all.length;
+  }
+  async createPhotoMemory(data: InsertPhotoMemory): Promise<PhotoMemory> {
+    const [pm] = await db.insert(schema.photoMemories).values(data).returning();
+    return pm;
+  }
+  async updatePhotoMemory(id: number, data: Partial<InsertPhotoMemory>): Promise<PhotoMemory | undefined> {
+    const [pm] = await db.update(schema.photoMemories).set({ ...data, updatedAt: new Date() }).where(eq(schema.photoMemories.id, id)).returning();
+    return pm;
+  }
+  async deletePhotoMemory(id: number): Promise<void> {
+    await db.delete(schema.photoMemories).where(eq(schema.photoMemories.id, id));
+  }
 
   // ── Persona Data Purge ────────────────────────────────────────────────────
   async deleteAllPersonaData(personaId: number): Promise<void> {
@@ -749,6 +923,7 @@ export class PgStorage implements IStorage {
     await db.delete(schema.writingStyles).where(eq(schema.writingStyles.personaId, personaId));
     await db.delete(schema.echoHeirs).where(eq(schema.echoHeirs.personaId, personaId));
     await db.delete(schema.echoTransfers).where(eq(schema.echoTransfers.personaId, personaId));
+    await db.delete(schema.photoMemories).where(eq(schema.photoMemories.personaId, personaId));
     await db.delete(schema.personas).where(eq(schema.personas.id, personaId));
   }
 
@@ -759,6 +934,11 @@ export class PgStorage implements IStorage {
   }
 
   async deleteAllUserData(userId: number): Promise<void> {
+    // Delete future letters, notifications, and photo memories
+    await db.delete(schema.futureLetters).where(eq(schema.futureLetters.userId, userId));
+    await db.delete(schema.notifications).where(eq(schema.notifications.userId, userId));
+    await db.delete(schema.photoMemories).where(eq(schema.photoMemories.userId, userId));
+
     // Delete journal entries
     await db.delete(schema.journalEntries).where(eq(schema.journalEntries.userId, userId));
 
