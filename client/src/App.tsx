@@ -38,6 +38,9 @@ import Letters from "@/pages/Letters";
 import LetterNew from "@/pages/LetterNew";
 import LetterDetail from "@/pages/LetterDetail";
 import LetterInbox from "@/pages/LetterInbox";
+import PhotoMemories from "@/pages/PhotoMemories";
+import PhotoMemoryNew from "@/pages/PhotoMemoryNew";
+import PhotoMemoryDetail from "@/pages/PhotoMemoryDetail";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated, or to reactivate if cancelled
@@ -103,6 +106,9 @@ function AppRoutes() {
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
         <Route path="/persona/:id/documents">{() => <ProtectedRoute component={DocumentLibrary} />}</Route>
+        <Route path="/photos">{() => <ProtectedRoute component={PhotoMemories} />}</Route>
+        <Route path="/photos/new">{() => <ProtectedRoute component={PhotoMemoryNew} />}</Route>
+        <Route path="/photos/:id">{() => <ProtectedRoute component={PhotoMemoryDetail} />}</Route>
         <Route path="/letters">{() => <ProtectedRoute component={Letters} />}</Route>
         <Route path="/letters/new">{() => <ProtectedRoute component={LetterNew} />}</Route>
         <Route path="/letters/inbox">{() => <ProtectedRoute component={LetterInbox} />}</Route>
