@@ -24,6 +24,7 @@ export default function PhotoMemoryNew() {
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [photoMemory, setPhotoMemory] = useState<PhotoMemory | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [photoDragOver, setPhotoDragOver] = useState(false);
 
   const { data: personas = [] } = useQuery<Persona[]>({
     queryKey: ["/api/personas"],
@@ -188,11 +189,15 @@ export default function PhotoMemoryNew() {
               </div>
             ) : (
               <div
-                className="border-2 border-dashed border-border rounded-lg p-12 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${photoDragOver ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(true); }}
+                onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(true); }}
+                onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(false); }}
+                onDrop={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(false); const file = e.dataTransfer.files[0]; if (file) { if (file.size > 10 * 1024 * 1024) { toast({ title: "File too large", description: "Maximum size is 10MB", variant: "destructive" }); return; } setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file)); } }}
               >
                 <Camera className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-sm text-muted-foreground">Click to select a photo</p>
+                <p className="text-sm text-muted-foreground">{photoDragOver ? "Drop photo here" : "Click or drag a photo here"}</p>
               </div>
             )}
 

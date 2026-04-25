@@ -336,6 +336,7 @@ function VoiceTab({ personaId, firstName }: { personaId: number; firstName: stri
   const audioRef = useRef<HTMLInputElement>(null);
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [audioDragOver, setAudioDragOver] = useState(false);
 
   const { data: mediaList = [] } = useQuery<Media[]>({
     queryKey: ["/api/personas", personaId, "media"],
@@ -387,10 +388,14 @@ function VoiceTab({ personaId, firstName }: { personaId: number; firstName: stri
             <Input placeholder="e.g., Voicemail from Christmas 2019" value={description} onChange={e => setDescription(e.target.value)} />
           </div>
           <button type="button" onClick={() => audioRef.current?.click()} disabled={uploading}
-            className="flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50"
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(true); }}
+            onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(true); }}
+            onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(false); }}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(false); const f = e.dataTransfer.files[0]; if (f) uploadAudio(f); }}
+            className={`flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed transition-all cursor-pointer disabled:opacity-50 ${audioDragOver ? "border-primary bg-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/50"}`}
             data-testid="button-upload-audio">
             <Mic className="h-8 w-8 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Upload Voice Recording</span>
+            <span className="text-sm font-medium text-foreground">{audioDragOver ? "Drop recording here" : "Upload Voice Recording"}</span>
             <span className="text-xs text-muted-foreground">MP3, WAV, M4A, M4R up to 50MB · {MAX_RECORDINGS - audioFiles.length} remaining</span>
           </button>
           <input ref={audioRef} type="file" accept="audio/*" className="hidden"
@@ -446,6 +451,7 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
   const [docTitle, setDocTitle] = useState("");
   const [documentType, setDocumentType] = useState<"voice" | "character">("voice");
   const [uploading, setUploading] = useState(false);
+  const [docDragOver, setDocDragOver] = useState(false);
 
   const { data: memories = [] } = useQuery<Memory[]>({
     queryKey: ["/api/personas", personaId, "memories"],
@@ -530,10 +536,14 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
         </div>
 
         <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50"
+          onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(true); }}
+          onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(true); }}
+          onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(false); }}
+          onDrop={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(false); const f = e.dataTransfer.files[0]; if (f) uploadDoc(f); }}
+          className={`flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed transition-all cursor-pointer disabled:opacity-50 ${docDragOver ? "border-primary bg-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/50"}`}
           data-testid="button-upload-document">
           <FileText className="h-8 w-8 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Upload Document</span>
+          <span className="text-sm font-medium text-foreground">{docDragOver ? "Drop document here" : "Upload Document"}</span>
           <span className="text-xs text-muted-foreground">PDF, DOCX, TXT up to 10MB</span>
         </button>
         <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" className="hidden"
