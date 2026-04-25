@@ -293,6 +293,11 @@ export const futureLetters = pgTable("future_letters", {
   deliverAt: timestamp("deliver_at").notNull(),
   deliveredAt: timestamp("delivered_at"),
   status: text("status").notNull().default("scheduled"), // 'scheduled', 'delivered', 'cancelled', 'failed'
+  personaId: integer("persona_id"),
+  deliveryRuleType: text("delivery_rule_type").default("date"), // 'date', 'milestone', 'sealed_until_passing', 'browsable_anytime'
+  deliveryMilestone: text("delivery_milestone"), // e.g. 'engagement', 'birth_of_child', 'graduation', 'loss'
+  recurring: boolean("recurring").default(false),
+  isSealed: boolean("is_sealed").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -332,3 +337,30 @@ export const photoMemories = pgTable("photo_memories", {
 export const insertPhotoMemorySchema = createInsertSchema(photoMemories).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertPhotoMemory = z.infer<typeof insertPhotoMemorySchema>;
 export type PhotoMemory = typeof photoMemories.$inferSelect;
+
+// ─── Stories (The Folder) ───────────────────────────────────────────────────
+export const stories = pgTable("stories", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  personaId: integer("persona_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertStorySchema = createInsertSchema(stories).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStory = z.infer<typeof insertStorySchema>;
+export type Story = typeof stories.$inferSelect;
+
+// ─── Milestones Observed (The Folder) ───────────────────────────────────────
+export const milestonesObserved = pgTable("milestones_observed", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  personaId: integer("persona_id"),
+  milestoneType: text("milestone_type").notNull(),
+  observedAt: timestamp("observed_at").defaultNow(),
+  note: text("note"),
+});
+export const insertMilestoneObservedSchema = createInsertSchema(milestonesObserved).omit({ id: true, observedAt: true });
+export type InsertMilestoneObserved = z.infer<typeof insertMilestoneObservedSchema>;
+export type MilestoneObserved = typeof milestonesObserved.$inferSelect;
