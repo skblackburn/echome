@@ -41,6 +41,12 @@ import LetterInbox from "@/pages/LetterInbox";
 import PhotoMemories from "@/pages/PhotoMemories";
 import PhotoMemoryNew from "@/pages/PhotoMemoryNew";
 import PhotoMemoryDetail from "@/pages/PhotoMemoryDetail";
+import Folder from "@/pages/Folder";
+import FolderChooser from "@/pages/FolderChooser";
+import FolderLetterNew from "@/pages/FolderLetterNew";
+import FolderStoryNew from "@/pages/FolderStoryNew";
+import FolderLetterDetail from "@/pages/FolderLetterDetail";
+import FolderStoryDetail from "@/pages/FolderStoryDetail";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated, or to reactivate if cancelled
@@ -113,6 +119,12 @@ function AppRoutes() {
         <Route path="/letters/new">{() => <ProtectedRoute component={LetterNew} />}</Route>
         <Route path="/letters/inbox">{() => <ProtectedRoute component={LetterInbox} />}</Route>
         <Route path="/letters/:id">{() => <ProtectedRoute component={LetterDetail} />}</Route>
+        <Route path="/folders">{() => <ProtectedRoute component={FolderChooser} />}</Route>
+        <Route path="/persona/:id/folder">{() => <ProtectedRoute component={Folder} />}</Route>
+        <Route path="/persona/:id/folder/letter/new">{() => <ProtectedRoute component={FolderLetterNew} />}</Route>
+        <Route path="/persona/:id/folder/story/new">{() => <ProtectedRoute component={FolderStoryNew} />}</Route>
+        <Route path="/persona/:id/folder/letter/:letterId">{() => <ProtectedRoute component={FolderLetterDetail} />}</Route>
+        <Route path="/persona/:id/folder/story/:storyId">{() => <ProtectedRoute component={FolderStoryDetail} />}</Route>
         <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
         <Route path="/reactivate">{() => <ProtectedRoute component={Reactivate} allowCancelled />}</Route>
 

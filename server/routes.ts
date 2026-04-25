@@ -16,6 +16,7 @@ import MemoryStore from "memorystore";
 import Stripe from "stripe";
 import { storage, db } from "./storage";
 import { sendWelcomeEmail, sendHeirInvitationEmail, sendTransferExecutedEmail, sendHeirClaimedEmail, sendLetterDeliveryEmail } from "./email";
+import { deliverSealedLetters } from "./letter-worker";
 import {
   insertPersonaSchema,
   insertTraitSchema,
@@ -2172,6 +2173,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       );
     }
 
+    // Deliver sealed-until-passing letters
+    deliverSealedLetters(persona.id).catch(err =>
+      console.error(`Sealed letter delivery failed for persona ${persona.id}:`, err)
+    );
+
     res.json({ success: true, message: "Transfer executed" });
   });
 
@@ -2440,6 +2446,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             console.error(`Scheduled transfer email failed for heir ${heir.id}:`, err)
           );
         }
+        deliverSealedLetters(transfer.personaId).catch(err =>
+          console.error(`Sealed letter delivery failed for persona ${transfer.personaId}:`, err)
+        );
         results.push({ personaId: transfer.personaId, trigger: "scheduled", status: "executed" });
       } catch (e) {
         console.error(`Scheduled transfer failed for persona ${transfer.personaId}:`, e);
@@ -2469,6 +2478,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
                 console.error(`On-passing transfer email failed for heir ${heir.id}:`, err)
               );
             }
+            deliverSealedLetters(transfer.personaId).catch(err =>
+              console.error(`Sealed letter delivery failed for persona ${transfer.personaId}:`, err)
+            );
             results.push({ personaId: transfer.personaId, trigger: "on_passing", status: "executed" });
           }
         }
@@ -3154,27 +3166,48 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Create letter
   app.post("/api/letters", requireAuth, async (req, res) => {
     try {
-      const { title, content, recipientType, recipientUserId, recipientHeirId, recipientName, recipientEmail, deliverAt } = req.body;
+      const { title, content, recipientType, recipientUserId, recipientHeirId, recipientName, recipientEmail, deliverAt,
+              personaId, deliveryRuleType, deliveryMilestone, recurring, isSealed } = req.body;
 
-      if (!title || !content || !recipientType || !deliverAt) {
-        return res.status(400).json({ error: "title, content, recipientType, and deliverAt are required" });
+      const ruleType = deliveryRuleType || "date";
+      const validRuleTypes = ["date", "milestone", "sealed_until_passing", "browsable_anytime"];
+      if (!validRuleTypes.includes(ruleType)) {
+        return res.status(400).json({ error: `deliveryRuleType must be one of: ${validRuleTypes.join(", ")}` });
+      }
+
+      if (!title || !content || !recipientType) {
+        return res.status(400).json({ error: "title, content, and recipientType are required" });
+      }
+
+      // deliverAt required for date-based; for browsable/milestone/sealed we use a far-future placeholder
+      let deliverDate: Date;
+      if (ruleType === "date" && deliverAt) {
+        deliverDate = new Date(deliverAt);
+        if (isNaN(deliverDate.getTime())) return res.status(400).json({ error: "Invalid deliverAt date" });
+        if (deliverDate <= new Date()) return res.status(400).json({ error: "deliverAt must be in the future" });
+        const maxDate = new Date(); maxDate.setFullYear(maxDate.getFullYear() + 100);
+        if (deliverDate > maxDate) return res.status(400).json({ error: "deliverAt cannot be more than 100 years in the future" });
+      } else if (ruleType === "date") {
+        return res.status(400).json({ error: "deliverAt is required for date delivery rule" });
+      } else {
+        // Non-date rules: set a placeholder far-future date
+        deliverDate = new Date("2099-12-31T00:00:00Z");
       }
 
       if (!["self", "heir", "custom_email"].includes(recipientType)) {
         return res.status(400).json({ error: "recipientType must be 'self', 'heir', or 'custom_email'" });
       }
 
-      const deliverDate = new Date(deliverAt);
-      if (isNaN(deliverDate.getTime())) {
-        return res.status(400).json({ error: "Invalid deliverAt date" });
+      if (ruleType === "milestone" && !deliveryMilestone) {
+        return res.status(400).json({ error: "deliveryMilestone is required when deliveryRuleType is 'milestone'" });
       }
-      if (deliverDate <= new Date()) {
-        return res.status(400).json({ error: "deliverAt must be in the future" });
-      }
-      const maxDate = new Date();
-      maxDate.setFullYear(maxDate.getFullYear() + 100);
-      if (deliverDate > maxDate) {
-        return res.status(400).json({ error: "deliverAt cannot be more than 100 years in the future" });
+
+      // Verify persona ownership if personaId provided
+      if (personaId) {
+        const persona = await storage.getPersona(personaId);
+        if (!persona || persona.userId !== req.user!.id) {
+          return res.status(403).json({ error: "Not authorized for this persona" });
+        }
       }
 
       // Resolve recipient email for self
@@ -3192,6 +3225,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         }
       }
 
+      // For browsable_anytime, mark as delivered immediately
+      const status = ruleType === "browsable_anytime" ? "delivered" : "scheduled";
+
       const letter = await storage.createFutureLetter({
         userId: req.user!.id,
         title,
@@ -3202,8 +3238,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         recipientName: recipientName || null,
         recipientEmail: resolvedEmail,
         deliverAt: deliverDate,
-        deliveredAt: null,
-        status: "scheduled",
+        deliveredAt: status === "delivered" ? new Date() : null,
+        status,
+        personaId: personaId || null,
+        deliveryRuleType: ruleType,
+        deliveryMilestone: deliveryMilestone || null,
+        recurring: recurring || false,
+        isSealed: isSealed || false,
       });
 
       res.status(201).json(letter);
@@ -3553,6 +3594,248 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     await storage.deletePhotoMemory(id);
     res.json({ success: true });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // THE FOLDER
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // GET /api/personas/:id/folder — aggregated folder contents
+  app.get("/api/personas/:id/folder", requireAuth, async (req, res) => {
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const { persona } = result;
+
+    const [letters, storiesList, documents, photoMems] = await Promise.all([
+      storage.getLettersByPersona(persona.id),
+      storage.getStoriesByPersona(persona.id),
+      storage.getMemories(persona.id),
+      storage.getPhotoMemoriesByPersona(persona.id),
+    ]);
+
+    // Build unified timeline with type discriminators
+    const timeline: any[] = [
+      ...letters.map(l => ({ ...l, _type: "letter", _sortDate: l.createdAt })),
+      ...storiesList.map(s => ({ ...s, _type: "story", _sortDate: s.createdAt })),
+      ...documents.filter(d => d.type === "document").map(d => ({ ...d, _type: "document", _sortDate: d.createdAt })),
+      ...photoMems.map(p => ({ ...p, _type: "photo", _sortDate: p.createdAt })),
+    ].sort((a, b) => {
+      const da = new Date(b._sortDate || 0).getTime();
+      const db2 = new Date(a._sortDate || 0).getTime();
+      return da - db2;
+    });
+
+    res.json({
+      persona,
+      letters,
+      stories: storiesList,
+      documents: documents.filter(d => d.type === "document"),
+      photos: photoMems,
+      timeline,
+    });
+  });
+
+  // POST /api/personas/:id/letters — convenience: create letter with persona_id pre-set
+  app.post("/api/personas/:id/letters", requireAuth, async (req, res) => {
+    const result = await verifyPersonaAccess(req, res, "write");
+    if (!result) return;
+    // Inject personaId into body and forward to the main letters endpoint
+    req.body.personaId = result.persona.id;
+    req.body.recipientType = req.body.recipientType || "self";
+    // Call the same logic as POST /api/letters
+    try {
+      const { title, content, recipientType, deliverAt,
+              deliveryRuleType, deliveryMilestone, recurring, isSealed } = req.body;
+      const ruleType = deliveryRuleType || "browsable_anytime";
+      const validRuleTypes = ["date", "milestone", "sealed_until_passing", "browsable_anytime"];
+      if (!validRuleTypes.includes(ruleType)) {
+        return res.status(400).json({ error: `deliveryRuleType must be one of: ${validRuleTypes.join(", ")}` });
+      }
+      if (!title || !content) {
+        return res.status(400).json({ error: "title and content are required" });
+      }
+      let deliverDate: Date;
+      if (ruleType === "date" && deliverAt) {
+        deliverDate = new Date(deliverAt);
+        if (isNaN(deliverDate.getTime())) return res.status(400).json({ error: "Invalid deliverAt date" });
+        if (deliverDate <= new Date()) return res.status(400).json({ error: "deliverAt must be in the future" });
+      } else if (ruleType === "date") {
+        return res.status(400).json({ error: "deliverAt is required for date delivery rule" });
+      } else {
+        deliverDate = new Date("2099-12-31T00:00:00Z");
+      }
+      if (ruleType === "milestone" && !deliveryMilestone) {
+        return res.status(400).json({ error: "deliveryMilestone is required for milestone delivery rule" });
+      }
+      const user = await storage.getUserById(req.user!.id);
+      const status = ruleType === "browsable_anytime" ? "delivered" : "scheduled";
+      const letter = await storage.createFutureLetter({
+        userId: req.user!.id,
+        title,
+        content,
+        recipientType: recipientType || "self",
+        recipientUserId: req.user!.id,
+        recipientHeirId: null,
+        recipientName: user?.name || null,
+        recipientEmail: user?.email || null,
+        deliverAt: deliverDate,
+        deliveredAt: status === "delivered" ? new Date() : null,
+        status,
+        personaId: result.persona.id,
+        deliveryRuleType: ruleType,
+        deliveryMilestone: deliveryMilestone || null,
+        recurring: recurring || false,
+        isSealed: isSealed || false,
+      });
+      res.status(201).json(letter);
+    } catch (err) {
+      console.error("Create persona letter error:", err);
+      res.status(500).json({ error: "Failed to create letter" });
+    }
+  });
+
+  // ── Stories ─────────────────────────────────────────────────────────────
+  app.post("/api/personas/:id/stories", requireAuth, async (req, res) => {
+    const result = await verifyPersonaAccess(req, res, "write");
+    if (!result) return;
+    const { title, content } = req.body;
+    if (!title || !content) return res.status(400).json({ error: "title and content are required" });
+    const story = await storage.createStory({
+      userId: req.user!.id,
+      personaId: result.persona.id,
+      title,
+      content,
+    });
+    res.status(201).json(story);
+  });
+
+  app.get("/api/personas/:id/stories", requireAuth, async (req, res) => {
+    const result = await verifyPersonaAccess(req, res, "read");
+    if (!result) return;
+    const storiesList = await storage.getStoriesByPersona(result.persona.id);
+    res.json(storiesList);
+  });
+
+  app.get("/api/stories/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid story ID" });
+    const story = await storage.getStoryById(id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    // Check access: author or heir with access to the persona
+    if (story.userId !== req.user!.id) {
+      const access = await canAccessPersona(req.user!.id, story.personaId, "read");
+      if (!access.allowed) return res.status(403).json({ error: "Not authorized" });
+    }
+    res.json(story);
+  });
+
+  app.put("/api/stories/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid story ID" });
+    const story = await storage.getStoryById(id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    if (story.userId !== req.user!.id) return res.status(403).json({ error: "Only the author can edit" });
+    const { title, content } = req.body;
+    const updated = await storage.updateStory(id, { title, content });
+    res.json(updated);
+  });
+
+  app.delete("/api/stories/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid story ID" });
+    const story = await storage.getStoryById(id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    if (story.userId !== req.user!.id) return res.status(403).json({ error: "Only the author can delete" });
+    await storage.deleteStory(id);
+    res.json({ success: true });
+  });
+
+  // ── Milestones Observed ─────────────────────────────────────────────────
+  app.post("/api/milestones", requireAuth, async (req, res) => {
+    try {
+      const { milestoneType, personaId, note } = req.body;
+      if (!milestoneType) return res.status(400).json({ error: "milestoneType is required" });
+
+      const observed = await storage.createMilestoneObserved({
+        userId: req.user!.id,
+        personaId: personaId || null,
+        milestoneType,
+        note: note || null,
+      });
+
+      // Find and deliver milestone-bound letters
+      // Look across all personas where this user is an heir
+      const heirs = await storage.getHeirsByUserId(req.user!.id);
+      let deliveredCount = 0;
+      for (const heir of heirs) {
+        if (heir.status !== "claimed") continue;
+        const transfers = await storage.getTransfersByPersona(heir.personaId);
+        const hasExecutedTransfer = transfers.some(t => t.status === "executed");
+        if (!hasExecutedTransfer) continue;
+
+        const matchingLetters = await storage.getLettersByMilestone(heir.personaId, milestoneType);
+        for (const letter of matchingLetters) {
+          const author = await storage.getUserById(letter.userId);
+          const authorName = author?.name || "Someone";
+
+          // Send email if recipient has email
+          if (letter.recipientEmail) {
+            await sendLetterDeliveryEmail(
+              letter.recipientEmail, letter.recipientName, authorName,
+              letter.title, letter.content, letter.createdAt || new Date(), letter.id,
+            );
+          }
+
+          // In-app notification
+          await storage.createNotification({
+            userId: req.user!.id,
+            type: "letter_delivered",
+            title: `A letter from ${authorName} has arrived — for your ${milestoneType}`,
+            message: letter.title,
+            referenceId: letter.id,
+            read: false,
+          });
+
+          await storage.updateFutureLetter(letter.id, { status: "delivered", deliveredAt: new Date() } as any);
+          deliveredCount++;
+        }
+      }
+
+      // Also check if personaId was provided directly (for persona owner marking milestones)
+      if (personaId) {
+        const matchingLetters = await storage.getLettersByMilestone(personaId, milestoneType);
+        for (const letter of matchingLetters) {
+          if (letter.status !== "scheduled") continue;
+          const author = await storage.getUserById(letter.userId);
+          const authorName = author?.name || "Someone";
+          const recipientId = letter.recipientUserId || letter.userId;
+
+          if (letter.recipientEmail) {
+            await sendLetterDeliveryEmail(
+              letter.recipientEmail, letter.recipientName, authorName,
+              letter.title, letter.content, letter.createdAt || new Date(), letter.id,
+            );
+          }
+
+          await storage.createNotification({
+            userId: recipientId,
+            type: "letter_delivered",
+            title: `A letter from ${authorName} has arrived — for your ${milestoneType}`,
+            message: letter.title,
+            referenceId: letter.id,
+            read: false,
+          });
+
+          await storage.updateFutureLetter(letter.id, { status: "delivered", deliveredAt: new Date() } as any);
+          deliveredCount++;
+        }
+      }
+
+      res.status(201).json({ observed, deliveredLetters: deliveredCount });
+    } catch (err) {
+      console.error("Create milestone observed error:", err);
+      res.status(500).json({ error: "Failed to record milestone" });
+    }
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

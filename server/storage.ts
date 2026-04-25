@@ -20,6 +20,8 @@ import type {
   FutureLetter, InsertFutureLetter,
   Notification, InsertNotification,
   PhotoMemory, InsertPhotoMemory,
+  Story, InsertStory,
+  MilestoneObserved, InsertMilestoneObserved,
   User,
 } from "@shared/schema";
 
@@ -390,6 +392,34 @@ export async function initDb() {
       updated_at TIMESTAMP DEFAULT NOW()
     )`;
 
+  // ── The Folder: extend future_letters + new tables ──────────────────────
+  await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS persona_id INTEGER`.catch(() => {});
+  await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS delivery_rule_type TEXT DEFAULT 'date'`.catch(() => {});
+  await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS delivery_milestone TEXT`.catch(() => {});
+  await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS recurring BOOLEAN DEFAULT FALSE`.catch(() => {});
+  await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS is_sealed BOOLEAN DEFAULT FALSE`.catch(() => {});
+
+  await client`
+    CREATE TABLE IF NOT EXISTS stories (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      persona_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`;
+
+  await client`
+    CREATE TABLE IF NOT EXISTS milestones_observed (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      persona_id INTEGER,
+      milestone_type TEXT NOT NULL,
+      observed_at TIMESTAMP DEFAULT NOW(),
+      note TEXT
+    )`;
+
   console.log("Database tables ready");
 
   // ── Auto-run pending SQL migrations ────────────────────────────────────
@@ -579,6 +609,23 @@ export interface IStorage {
   createPhotoMemory(data: InsertPhotoMemory): Promise<PhotoMemory>;
   updatePhotoMemory(id: number, data: Partial<InsertPhotoMemory>): Promise<PhotoMemory | undefined>;
   deletePhotoMemory(id: number): Promise<void>;
+
+  // Stories (The Folder)
+  createStory(data: InsertStory): Promise<Story>;
+  getStoriesByPersona(personaId: number): Promise<Story[]>;
+  getStoryById(id: number): Promise<Story | undefined>;
+  updateStory(id: number, data: Partial<InsertStory>): Promise<Story | undefined>;
+  deleteStory(id: number): Promise<void>;
+
+  // Milestones Observed (The Folder)
+  createMilestoneObserved(data: InsertMilestoneObserved): Promise<MilestoneObserved>;
+  getMilestonesObservedByUser(userId: number): Promise<MilestoneObserved[]>;
+
+  // Folder queries
+  getLettersByPersona(personaId: number): Promise<FutureLetter[]>;
+  getPhotoMemoriesByPersona(personaId: number): Promise<PhotoMemory[]>;
+  getLettersByMilestone(personaId: number, milestoneType: string): Promise<FutureLetter[]>;
+  getSealedLettersByPersona(personaId: number): Promise<FutureLetter[]>;
 
   // Subscriptions
   updateUserSubscription(userId: number, data: Partial<{
@@ -975,6 +1022,50 @@ export class PgStorage implements IStorage {
     await db.delete(schema.photoMemories).where(eq(schema.photoMemories.id, id));
   }
 
+  // ── Stories (The Folder) ──────────────────────────────────────────────────
+  async createStory(data: InsertStory): Promise<Story> {
+    const [s] = await db.insert(schema.stories).values(data).returning();
+    return s;
+  }
+  async getStoriesByPersona(personaId: number): Promise<Story[]> {
+    return db.select().from(schema.stories).where(eq(schema.stories.personaId, personaId)).orderBy(desc(schema.stories.createdAt));
+  }
+  async getStoryById(id: number): Promise<Story | undefined> {
+    return db.select().from(schema.stories).where(eq(schema.stories.id, id)).then(r => r[0]);
+  }
+  async updateStory(id: number, data: Partial<InsertStory>): Promise<Story | undefined> {
+    const [s] = await db.update(schema.stories).set({ ...data, updatedAt: new Date() }).where(eq(schema.stories.id, id)).returning();
+    return s;
+  }
+  async deleteStory(id: number): Promise<void> {
+    await db.delete(schema.stories).where(eq(schema.stories.id, id));
+  }
+
+  // ── Milestones Observed ─────────────────────────────────────────────────
+  async createMilestoneObserved(data: InsertMilestoneObserved): Promise<MilestoneObserved> {
+    const [m] = await db.insert(schema.milestonesObserved).values(data).returning();
+    return m;
+  }
+  async getMilestonesObservedByUser(userId: number): Promise<MilestoneObserved[]> {
+    return db.select().from(schema.milestonesObserved).where(eq(schema.milestonesObserved.userId, userId)).orderBy(desc(schema.milestonesObserved.observedAt));
+  }
+
+  // ── Folder Queries ──────────────────────────────────────────────────────
+  async getLettersByPersona(personaId: number): Promise<FutureLetter[]> {
+    return db.select().from(schema.futureLetters).where(eq(schema.futureLetters.personaId, personaId)).orderBy(desc(schema.futureLetters.createdAt));
+  }
+  async getPhotoMemoriesByPersona(personaId: number): Promise<PhotoMemory[]> {
+    return db.select().from(schema.photoMemories).where(eq(schema.photoMemories.personaId, personaId)).orderBy(desc(schema.photoMemories.createdAt));
+  }
+  async getLettersByMilestone(personaId: number, milestoneType: string): Promise<FutureLetter[]> {
+    const all = await db.select().from(schema.futureLetters).where(eq(schema.futureLetters.personaId, personaId));
+    return all.filter(l => l.deliveryRuleType === "milestone" && l.deliveryMilestone === milestoneType && l.status === "scheduled");
+  }
+  async getSealedLettersByPersona(personaId: number): Promise<FutureLetter[]> {
+    const all = await db.select().from(schema.futureLetters).where(eq(schema.futureLetters.personaId, personaId));
+    return all.filter(l => l.deliveryRuleType === "sealed_until_passing" && l.status === "scheduled");
+  }
+
   // ── Persona Data Purge ────────────────────────────────────────────────────
   async deleteAllPersonaData(personaId: number): Promise<void> {
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.personaId, personaId));
@@ -988,6 +1079,8 @@ export class PgStorage implements IStorage {
     await db.delete(schema.echoHeirs).where(eq(schema.echoHeirs.personaId, personaId));
     await db.delete(schema.echoTransfers).where(eq(schema.echoTransfers.personaId, personaId));
     await db.delete(schema.photoMemories).where(eq(schema.photoMemories.personaId, personaId));
+    await db.delete(schema.stories).where(eq(schema.stories.personaId, personaId));
+    await db.delete(schema.milestonesObserved).where(eq(schema.milestonesObserved.personaId, personaId));
     await db.delete(schema.personas).where(eq(schema.personas.id, personaId));
   }
 
@@ -998,10 +1091,12 @@ export class PgStorage implements IStorage {
   }
 
   async deleteAllUserData(userId: number): Promise<void> {
-    // Delete future letters, notifications, and photo memories
+    // Delete future letters, notifications, photo memories, stories, milestones observed
     await db.delete(schema.futureLetters).where(eq(schema.futureLetters.userId, userId));
     await db.delete(schema.notifications).where(eq(schema.notifications.userId, userId));
     await db.delete(schema.photoMemories).where(eq(schema.photoMemories.userId, userId));
+    await db.delete(schema.stories).where(eq(schema.stories.userId, userId));
+    await db.delete(schema.milestonesObserved).where(eq(schema.milestonesObserved.userId, userId));
 
     // Delete journal entries
     await db.delete(schema.journalEntries).where(eq(schema.journalEntries.userId, userId));

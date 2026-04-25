@@ -18,7 +18,7 @@ import {
 import {
   MessageCircle, BookOpen, Mic, Brain, ChevronRight,
   Gift, Users, ScrollText, Sparkles, Heart, Pencil, FileText,
-  AlertTriangle, Trash2, GitFork, Shield
+  AlertTriangle, Trash2, GitFork, Shield, FolderOpen
 } from "lucide-react";
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
 import { cn } from "@/lib/utils";
@@ -323,21 +323,38 @@ export default function PersonaDashboard() {
           <StatCard icon={ScrollText} label="Documents" count={docCount} color="bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400" />
         </div>
 
-        {/* Primary action */}
-        <Link href={`/persona/${personaId}/chat`}>
-          <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
-                <div>
-                  <div className="font-semibold">Speak with {firstName}</div>
-                  <div className="text-sm opacity-75">Have a conversation powered by their memories</div>
+        {/* Primary actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link href={`/persona/${personaId}/chat`}>
+            <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0 h-full">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
+                  <div>
+                    <div className="font-semibold">Speak with {firstName}</div>
+                    <div className="text-sm opacity-75">Chat powered by their memories</div>
+                  </div>
                 </div>
-              </div>
-              <ChevronRight className="h-5 w-5 opacity-60" />
-            </CardContent>
-          </Card>
-        </Link>
+                <ChevronRight className="h-5 w-5 opacity-60" />
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href={`/persona/${personaId}/folder`}>
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-primary/30 hover:border-primary/60 h-full">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-primary/10"><FolderOpen className="h-5 w-5 text-primary" /></div>
+                  <div>
+                    <div className="font-semibold text-foreground">Open Folder</div>
+                    <div className="text-sm text-muted-foreground">Letters, stories &amp; memories</div>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
 
         {/* Feature grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
