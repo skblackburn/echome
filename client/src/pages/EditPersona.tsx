@@ -51,6 +51,7 @@ export default function EditPersona() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
+  const [avatarDragOver, setAvatarDragOver] = useState(false);
 
   // Populate form when persona loads
   useEffect(() => {
@@ -164,7 +165,11 @@ export default function EditPersona() {
         <div className="flex items-center gap-4">
           <div className="relative">
             <button type="button" onClick={() => avatarRef.current?.click()}
-              className="flex-shrink-0 w-24 h-24 rounded-full border-2 border-dashed border-primary/30 flex items-center justify-center bg-background hover:bg-primary/5 hover:border-primary/50 transition-all cursor-pointer overflow-hidden group">
+              onDragOver={e => { e.preventDefault(); e.stopPropagation(); setAvatarDragOver(true); }}
+              onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setAvatarDragOver(true); }}
+              onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setAvatarDragOver(false); }}
+              onDrop={e => { e.preventDefault(); e.stopPropagation(); setAvatarDragOver(false); const file = e.dataTransfer.files[0]; if (!file) return; const validTypes = ["image/jpeg", "image/png", "image/webp"]; if (!validTypes.includes(file.type)) { toast({ title: "Invalid file type", description: "Please upload a JPG, PNG, or WebP image.", variant: "destructive" }); return; } const reader = new FileReader(); reader.onload = () => { setAvatarUrl(reader.result as string); }; reader.readAsDataURL(file); }}
+              className={`flex-shrink-0 w-24 h-24 rounded-full border-2 border-dashed flex items-center justify-center transition-all cursor-pointer overflow-hidden group ${avatarDragOver ? "border-primary bg-primary/10" : "border-primary/30 bg-background hover:bg-primary/5 hover:border-primary/50"}`}>
               {avatarUrl ? (
                 <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
               ) : currentPhoto ? (
