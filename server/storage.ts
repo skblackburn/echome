@@ -2,6 +2,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { eq, desc, and, lte } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import * as fs from "fs";
+import * as path from "path";
 import type {
   Persona, InsertPersona,
   Trait, InsertTrait,
@@ -389,6 +391,68 @@ export async function initDb() {
     )`;
 
   console.log("Database tables ready");
+
+  // ── Auto-run pending SQL migrations ────────────────────────────────────
+  await client`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      filename TEXT PRIMARY KEY,
+      applied_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+
+  // Find migrations directory — try cwd first, then relative to this file
+  let migrationsDir = path.resolve(process.cwd(), "migrations");
+  if (!fs.existsSync(migrationsDir)) {
+    migrationsDir = path.resolve(__dirname, "../migrations");
+  }
+  if (!fs.existsSync(migrationsDir)) {
+    console.warn("migrations/ directory not found, skipping migration runner");
+    return;
+  }
+
+  const sqlFiles = fs.readdirSync(migrationsDir)
+    .filter((f: string) => f.endsWith(".sql"))
+    .sort();
+
+  if (sqlFiles.length === 0) {
+    console.log("No SQL migration files found");
+    return;
+  }
+
+  const applied = await client`SELECT filename FROM _migrations`;
+  const appliedSet = new Set(applied.map((r: { filename: string }) => r.filename));
+
+  for (const file of sqlFiles) {
+    if (appliedSet.has(file)) continue;
+
+    const filePath = path.join(migrationsDir, file);
+    const sql = fs.readFileSync(filePath, "utf-8").trim();
+    if (!sql) {
+      console.log(`Skipping empty migration: ${file}`);
+      continue;
+    }
+
+    try {
+      await client.begin(async (tx) => {
+        await tx.unsafe(sql);
+        await tx`INSERT INTO _migrations (filename) VALUES (${file})`;
+      });
+      console.log(`Applied migration: ${file}`);
+    } catch (err: any) {
+      // Forgive "already exists" errors — the DB state is already correct
+      const pgCode = err?.code;
+      if (pgCode === "42701" || pgCode === "42710" || pgCode === "42P07") {
+        console.warn(`Migration ${file} skipped (already exists): ${err.message}`);
+        // Still mark as applied so we don't retry
+        await client`INSERT INTO _migrations (filename) VALUES (${file}) ON CONFLICT DO NOTHING`;
+      } else {
+        console.error(`Migration ${file} FAILED:`, err);
+        throw err;
+      }
+    }
+  }
+
+  console.log("All migrations up to date");
 }
 
 export interface IStorage {
