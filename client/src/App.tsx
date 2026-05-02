@@ -5,6 +5,9 @@ import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Home from "@/pages/Home";
+import Landing from "@/pages/Landing";
+import Onboarding from "@/pages/Onboarding";
+import FinalFolder from "@/pages/FinalFolder";
 import CreatePersona from "@/pages/CreatePersona";
 import PersonaDashboard from "@/pages/PersonaDashboard";
 import MemoryIntake from "@/pages/MemoryIntake";
@@ -77,6 +80,28 @@ function ProtectedRoute({ component: Component, allowCancelled }: { component: R
   return <Component />;
 }
 
+// Show Landing for visitors, Home dashboard for authenticated users
+function LandingOrHome() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+      </div>
+    );
+  }
+
+  if (user) {
+    if (user.status === "cancelled") {
+      return <Reactivate />;
+    }
+    return <Home />;
+  }
+
+  return <Landing />;
+}
+
 function AppRoutes() {
   return (
     <Router hook={useHashLocation}>
@@ -87,6 +112,7 @@ function AppRoutes() {
         <Route path="/pricing" component={Pricing} />
         <Route path="/faq" component={Faq} />
         <Route path="/privacy" component={Privacy} />
+        <Route path="/final-folder" component={FinalFolder} />
         <Route path="/join" component={JoinEcho} />
         <Route path="/heirs/claim/:token" component={ClaimEcho} />
         <Route path="/persona/:id/chat" component={Chat} />
@@ -94,7 +120,8 @@ function AppRoutes() {
         <Route path="/persona/:id/contributor-settings" component={ContributorSettings} />
 
         {/* Protected routes */}
-        <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
+        <Route path="/">{() => <LandingOrHome />}</Route>
+        <Route path="/onboarding">{() => <ProtectedRoute component={Onboarding} />}</Route>
         <Route path="/create">{() => <ProtectedRoute component={CreatePersona} />}</Route>
         <Route path="/journal">{() => <ProtectedRoute component={JournalHome} />}</Route>
         <Route path="/journal/new">{() => <ProtectedRoute component={JournalEditor} />}</Route>

@@ -199,20 +199,19 @@ export default function Home() {
               <Heart className="h-8 w-8 text-primary" />
             </div>
             <h1 className="font-display text-3xl font-semibold text-foreground mb-3">
-              Preserve a voice that matters
+              Write to the people you love.
             </h1>
             <p className="text-muted-foreground text-base max-w-md mx-auto leading-relaxed mb-8">
-              EchoMe captures someone's personality, stories, and voice — so the people who love them can keep asking
-              <em className="text-foreground"> "What would they say?"</em>
+              Letters, stories, voice notes, and photos for your family — delivered when you choose. Start a Folder for someone, or pick up where you left off.
             </p>
 
             {/* Feature pills */}
             <div className="flex flex-wrap gap-2 justify-center mb-10">
               {[
                 { icon: Mic, label: "Voice & stories" },
-                { icon: Heart, label: "Personality capture" },
-                { icon: MessageCircle, label: "AI conversation" },
-                { icon: BookOpen, label: "Memory archive" },
+                { icon: Heart, label: "Letters & Folders" },
+                { icon: BookOpen, label: "Journal & memories" },
+                { icon: MessageCircle, label: "Optional AI" },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm">
                   <Icon className="h-3.5 w-3.5" />
@@ -224,7 +223,7 @@ export default function Home() {
             <Link href="/create">
               <Button size="lg" className="gap-2" data-testid="button-start-echo">
                 <Plus className="h-4 w-4" />
-                Create your first Echo
+                Start your first Folder
               </Button>
             </Link>
           </div>
