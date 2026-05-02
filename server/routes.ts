@@ -681,6 +681,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // USER PREFERENCES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  app.get("/api/user/preferences", requireAuth, async (req, res) => {
+    const prefs = await storage.getUserPreferences(req.user!.id);
+    res.json(prefs);
+  });
+
+  app.put("/api/user/preferences", requireAuth, async (req, res) => {
+    const allowedFields = [
+      "aiChatEnabled", "aiReflectionsEnabled", "aiPhotoPromptsEnabled",
+      "aiVoiceTranscriptionEnabled", "aiWritingStyleEnabled",
+      "emailLetterDelivery", "emailMilestones", "emailMarketing",
+    ];
+    const updates: Record<string, boolean> = {};
+    for (const key of allowedFields) {
+      if (typeof req.body[key] === "boolean") {
+        updates[key] = req.body[key];
+      }
+    }
+    const prefs = await storage.updateUserPreferences(req.user!.id, updates);
+    res.json(prefs);
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // STRIPE / SUBSCRIPTION ROUTES
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1493,6 +1518,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.post("/api/personas/:id/analyze-style", requireAuth, async (req, res) => {
+    // AI feature gate
+    const stylePrefs = await storage.getUserPreferences(req.user!.id);
+    if (!stylePrefs.aiWritingStyleEnabled) {
+      return res.status(403).json({ error: "Writing style analysis is not enabled. Turn it on in Settings.", feature: "ai_writing_style", settings_url: "/settings" });
+    }
+
     const persona = await verifyPersonaOwnership(req, res);
     if (!persona) return;
     const personaId = persona.id;
@@ -1535,6 +1566,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const personaId = parseInt(req.params.id);
     const access = await canAccessPersona(req.user!.id, personaId, "read");
     if (!access.allowed) return res.status(403).json({ error: "Not authorized" });
+
+    // AI feature gate
+    const chatPrefs = await storage.getUserPreferences(req.user!.id);
+    if (!chatPrefs.aiChatEnabled) {
+      return res.status(403).json({ error: "AI Echo chat is not enabled. Turn it on in Settings.", feature: "ai_chat", settings_url: "/settings" });
+    }
 
     const { message, viewerCode } = req.body as { message: string; viewerCode?: string };
 
@@ -2905,6 +2942,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const entryId = parseInt(req.params.id);
     if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
 
+    // AI feature gate
+    const reflectPrefs = await storage.getUserPreferences(req.user!.id);
+    if (!reflectPrefs.aiReflectionsEnabled) {
+      return res.status(403).json({ error: "AI reflections are not enabled. Turn them on in Settings.", feature: "ai_reflections", settings_url: "/settings" });
+    }
+
     const entry = await storage.getJournalEntryById(entryId);
     if (!entry) return res.status(404).json({ error: "Entry not found" });
     if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
@@ -3021,11 +3064,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const durationSeconds = req.body.duration ? parseInt(req.body.duration) : null;
       const today = new Date().toISOString().split("T")[0];
 
-      // Create entry with pending transcription
+      // Check voice transcription preference
+      const voicePrefs = await storage.getUserPreferences(userId);
+      const transcriptionEnabled = voicePrefs.aiVoiceTranscriptionEnabled;
+
+      // Create entry — if transcription disabled, store audio without calling Whisper
       const entry = await storage.createJournalEntry({
         userId,
         title: req.body.title || null,
-        content: "(Transcribing...)",
+        content: transcriptionEnabled ? "(Transcribing...)" : "",
         entryDate: req.body.entryDate || today,
         mood: req.body.mood || null,
         includedInEcho: false,
@@ -3035,15 +3082,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         aiReflections: null,
         audioUrl,
         audioDurationSeconds: durationSeconds,
-        transcriptionStatus: "pending",
+        transcriptionStatus: transcriptionEnabled ? "pending" : "disabled",
         entryType: "voice",
       });
 
       // Return entry immediately, transcribe async
       res.json(entry);
 
-      // Async transcription
-      if (openai) {
+      // Async transcription (only if AI transcription is enabled)
+      if (openai && transcriptionEnabled) {
         try {
           const audioStream = fs.createReadStream(finalPath);
           const transcription = await openai.audio.transcriptions.create({
@@ -3122,6 +3169,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.post("/api/journal/:id/retranscribe", requireAuth, async (req, res) => {
     const entryId = parseInt(req.params.id);
     if (isNaN(entryId)) return res.status(400).json({ error: "Invalid entry ID" });
+
+    // AI feature gate
+    const retransPrefs = await storage.getUserPreferences(req.user!.id);
+    if (!retransPrefs.aiVoiceTranscriptionEnabled) {
+      return res.status(403).json({ error: "Voice transcription is not enabled. Turn it on in Settings.", feature: "ai_voice_transcription", settings_url: "/settings" });
+    }
 
     const entry = await storage.getJournalEntryById(entryId);
     if (!entry) return res.status(404).json({ error: "Entry not found" });
@@ -3422,10 +3475,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const photoUrl = `/uploads/photo-memories/${userId}/${req.file.filename}`;
 
-    // Generate AI questions from the photo
+    // Check AI photo prompts preference
+    const photoPrefs = await storage.getUserPreferences(userId);
+    const aiPhotoEnabled = photoPrefs.aiPhotoPromptsEnabled;
+
+    // Generate AI questions from the photo (only if AI photo prompts are enabled)
     let aiPrompts: string[] = [];
     try {
-      if (openai) {
+      if (openai && aiPhotoEnabled) {
         const imageBuffer = fs.readFileSync(req.file.path);
         const base64 = imageBuffer.toString("base64");
         const mimeType = req.file.mimetype || "image/jpeg";
@@ -3459,7 +3516,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("Vision API error:", err);
     }
 
-    // Fallback questions if AI didn't work
+    // Fallback questions if AI didn't work or wasn't enabled
     if (aiPrompts.length === 0) {
       aiPrompts = [
         "What was happening when this photo was taken?",

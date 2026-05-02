@@ -11,7 +11,12 @@ import {
   Sparkles, Trash2, Save, Loader2, MessageSquareQuote, Mic, Square, RotateCcw, Play, Pause,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 import type { JournalEntry } from "@shared/schema";
+
+interface UserPreferences {
+  aiReflectionsEnabled: boolean;
+}
 
 const MOODS = [
   { key: "grateful", label: "Grateful", color: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800" },
@@ -55,6 +60,11 @@ export default function JournalEditor() {
   const [savedEntryId, setSavedEntryId] = useState<number | null>(entryId);
   const [reflectionQuestion, setReflectionQuestion] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const { data: userPrefs } = useQuery<UserPreferences>({
+    queryKey: ["/api/user/preferences"],
+  });
+  const reflectionsEnabled = userPrefs?.aiReflectionsEnabled ?? true;
 
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -328,10 +338,16 @@ export default function JournalEditor() {
           </div>
         )}
 
-        {tab === "write" && hasContent && (
+        {tab === "write" && hasContent && reflectionsEnabled && (
           <Button variant="outline" size="sm" onClick={() => reflectMutation.mutate()} disabled={reflectMutation.isPending} className="gap-1.5 text-[#c48585] border-[#c48585]/30 hover:bg-[#c48585]/5">
             {reflectMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}Help me reflect
           </Button>
+        )}
+        {tab === "write" && hasContent && !reflectionsEnabled && (
+          <div className="text-xs text-muted-foreground">
+            <Sparkles className="h-3 w-3 inline mr-1" />
+            AI reflections are off. <Link href="/settings" className="underline text-primary">Turn on in Settings</Link>
+          </div>
         )}
 
         {personas.length > 0 ? (

@@ -161,8 +161,8 @@ export default function Home() {
                 <CreditCard className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/account">
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Account">
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Settings">
                 <Settings className="h-4 w-4" />
               </Button>
             </Link>
