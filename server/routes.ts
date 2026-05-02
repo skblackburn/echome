@@ -1066,7 +1066,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // ── Serve uploaded files ────────────────────────────────────────────────────
-  app.use("/uploads", async (req, res, next) => {
+  // Auth-gated to prevent public enumeration. Full ownership-based authorization
+  // will be implemented in the R2 migration (see photo-storage-audit.md PR C).
+  app.use("/uploads", requireAuth, async (req, res, next) => {
     const filePath = path.join(uploadDir, path.basename(req.path));
     if (fs.existsSync(filePath)) {
       res.sendFile(filePath);
