@@ -10,7 +10,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Edit2, Trash2, Save, X, Mail, Clock, CheckCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Calendar, Edit2, Trash2, Save, X, Mail, Clock, CheckCircle, RotateCw, Bell } from "lucide-react";
 
 interface FutureLetter {
   id: number;
@@ -25,6 +36,7 @@ interface FutureLetter {
   deliverAt: string;
   deliveredAt: string | null;
   status: string;
+  reminderSentAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +103,20 @@ export default function LetterDetail() {
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resendMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/letters/${letterId}/resend`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/letters", letterId] });
+      toast({ title: "Letter resent" });
+    },
+    onError: (err: Error) => {
+      const msg = err.message?.includes("429") || err.message?.includes("Already resent")
+        ? "Already resent today — try again tomorrow"
+        : err.message;
+      toast({ title: "Error", description: msg, variant: "destructive" });
     },
   });
 
@@ -208,7 +234,18 @@ export default function LetterDetail() {
               </div>
             </div>
 
-            {/* Actions (only for scheduled letters authored by user) */}
+            {/* Reminder status for scheduled letters */}
+            {letter.status === "scheduled" && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Bell className="h-3.5 w-3.5" />
+                {letter.reminderSentAt
+                  ? `Reminder sent on ${new Date(letter.reminderSentAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
+                  : "We'll send you a reminder one week before delivery"
+                }
+              </div>
+            )}
+
+            {/* Actions for scheduled letters */}
             {letter.status === "scheduled" && (
               <div className="flex gap-3">
                 <Button variant="outline" onClick={startEditing} className="gap-2">
@@ -226,6 +263,33 @@ export default function LetterDetail() {
                 >
                   <Trash2 className="h-4 w-4" /> {cancelMutation.isPending ? "Cancelling..." : "Cancel Letter"}
                 </Button>
+              </div>
+            )}
+
+            {/* Resend button for delivered letters */}
+            {letter.status === "delivered" && (
+              <div className="flex gap-3">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="gap-2" disabled={resendMutation.isPending}>
+                      <RotateCw className="h-4 w-4" /> {resendMutation.isPending ? "Resending..." : "Resend Letter"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Resend this letter?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Resend this letter to {letter.recipientName || letter.recipientEmail || "the recipient"}? They'll get a new email and in-app notification.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => resendMutation.mutate()}>
+                        Resend
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </>

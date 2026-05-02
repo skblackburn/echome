@@ -298,12 +298,24 @@ export const futureLetters = pgTable("future_letters", {
   deliveryMilestone: text("delivery_milestone"), // e.g. 'engagement', 'birth_of_child', 'graduation', 'loss'
   recurring: boolean("recurring").default(false),
   isSealed: boolean("is_sealed").default(false),
+  reminderSentAt: timestamp("reminder_sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export const insertFutureLetterSchema = createInsertSchema(futureLetters).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertFutureLetter = z.infer<typeof insertFutureLetterSchema>;
 export type FutureLetter = typeof futureLetters.$inferSelect;
+
+// ─── Letter Resends ────────────────────────────────────────────────────────
+export const letterResends = pgTable("letter_resends", {
+  id: serial("id").primaryKey(),
+  letterId: integer("letter_id").notNull(),
+  resentAt: timestamp("resent_at").notNull().defaultNow(),
+  resentBy: integer("resent_by").notNull(),
+});
+export const insertLetterResendSchema = createInsertSchema(letterResends).omit({ id: true });
+export type InsertLetterResend = z.infer<typeof insertLetterResendSchema>;
+export type LetterResend = typeof letterResends.$inferSelect;
 
 // ─── Notifications ──────────────────────────────────────────────────────────
 export const notifications = pgTable("notifications", {

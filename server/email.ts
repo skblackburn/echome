@@ -242,3 +242,42 @@ export async function sendHeirClaimedEmail(
     html: emailLayout(content),
   });
 }
+
+export async function sendLetterAuthorReminder(
+  authorEmail: string,
+  authorName: string,
+  recipientName: string | null,
+  recipientEmail: string | null,
+  letterTitle: string,
+  deliverAt: Date,
+  letterId: number,
+): Promise<void> {
+  const greeting = authorName ? `Hi ${authorName}` : "Hello";
+  const deliveryDate = deliverAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const recipientDisplay = recipientName || recipientEmail || "your recipient";
+  const editUrl = `${APP_URL}/#/letters/${letterId}`;
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:600;color:#3d2e24;font-family:Georgia,'Times New Roman',serif;">
+      ${greeting},
+    </h2>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      Your letter <strong>"${letterTitle}"</strong> is scheduled to deliver to <strong>${recipientDisplay}</strong>${recipientEmail ? ` (${recipientEmail})` : ""} on <strong>${deliveryDate}</strong> — about a week from now.
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#5c4a3f;">
+      If their email address has changed, you can update it before delivery.
+    </p>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${editUrl}" style="display:inline-block;padding:12px 32px;background-color:#8b5e6b;color:white;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;">
+        Review Your Letter
+      </a>
+    </div>
+    <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#9a8d82;font-style:italic;text-align:center;">
+      No changes needed? No action required — your letter will deliver on schedule.
+    </p>`;
+
+  await sendEmail({
+    to: authorEmail,
+    subject: `Heads up: your letter to ${recipientDisplay} delivers next week`,
+    html: emailLayout(content),
+  });
+}

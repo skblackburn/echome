@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { eq, desc, and, lte } from "drizzle-orm";
+import { eq, desc, and, lte, gte, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as fs from "fs";
 import * as path from "path";
@@ -18,6 +18,7 @@ import type {
   EchoTransfer, InsertEchoTransfer,
   JournalEntry, InsertJournalEntry,
   FutureLetter, InsertFutureLetter,
+  LetterResend, InsertLetterResend,
   Notification, InsertNotification,
   PhotoMemory, InsertPhotoMemory,
   Story, InsertStory,
@@ -399,6 +400,15 @@ export async function initDb() {
   await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS delivery_milestone TEXT`.catch(() => {});
   await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS recurring BOOLEAN DEFAULT FALSE`.catch(() => {});
   await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS is_sealed BOOLEAN DEFAULT FALSE`.catch(() => {});
+  await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMP`.catch(() => {});
+
+  await client`
+    CREATE TABLE IF NOT EXISTS letter_resends (
+      id SERIAL PRIMARY KEY,
+      letter_id INTEGER NOT NULL,
+      resent_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      resent_by INTEGER NOT NULL
+    )`;
 
   await client`
     CREATE TABLE IF NOT EXISTS stories (
@@ -596,6 +606,11 @@ export interface IStorage {
   deleteFutureLetter(id: number): Promise<void>;
   getDueLetters(): Promise<FutureLetter[]>;
   getLettersInbox(userId: number): Promise<FutureLetter[]>;
+  getLettersNeedingReminder(): Promise<FutureLetter[]>;
+
+  // Letter Resends
+  createLetterResend(data: InsertLetterResend): Promise<LetterResend>;
+  getResendCountToday(letterId: number): Promise<number>;
 
   // Notifications
   createNotification(data: InsertNotification): Promise<Notification>;
@@ -985,6 +1000,34 @@ export class PgStorage implements IStorage {
       const db2 = b.deliveredAt?.getTime() || 0;
       return db2 - da;
     });
+  }
+  async getLettersNeedingReminder(): Promise<FutureLetter[]> {
+    const now = new Date();
+    const sixDays = new Date(now.getTime() + 6 * 24 * 60 * 60 * 1000);
+    const eightDays = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000);
+    return db.select().from(schema.futureLetters)
+      .where(and(
+        eq(schema.futureLetters.status, "scheduled"),
+        gte(schema.futureLetters.deliverAt, sixDays),
+        lte(schema.futureLetters.deliverAt, eightDays),
+        isNull(schema.futureLetters.reminderSentAt),
+      ));
+  }
+
+  // ── Letter Resends ────────────────────────────────────────────────────
+  async createLetterResend(data: InsertLetterResend): Promise<LetterResend> {
+    const [r] = await db.insert(schema.letterResends).values(data).returning();
+    return r;
+  }
+  async getResendCountToday(letterId: number): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const rows = await db.select().from(schema.letterResends)
+      .where(and(
+        eq(schema.letterResends.letterId, letterId),
+        gte(schema.letterResends.resentAt, startOfDay),
+      ));
+    return rows.length;
   }
 
   // ── Notifications ──────────────────────────────────────────────────────
