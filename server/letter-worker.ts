@@ -3,7 +3,7 @@
 // Extended for The Folder: recurring letters, sealed-until-passing, and milestone-based delivery.
 
 import { storage } from "./storage";
-import { sendLetterDeliveryEmail } from "./email";
+import { sendLetterDeliveryEmail, sendLetterAuthorReminder } from "./email";
 
 const DELIVERY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -80,6 +80,42 @@ async function deliverDueLetters(): Promise<void> {
   }
 }
 
+async function sendUpcomingDeliveryReminders(): Promise<void> {
+  try {
+    const letters = await storage.getLettersNeedingReminder();
+    if (letters.length === 0) return;
+
+    console.log(`[LETTER-WORKER] Found ${letters.length} letters needing delivery reminders`);
+
+    for (const letter of letters) {
+      try {
+        const author = await storage.getUserById(letter.userId);
+        if (!author?.email) {
+          console.warn(`[LETTER-WORKER] No email for author ${letter.userId}, skipping reminder for letter ${letter.id}`);
+          continue;
+        }
+
+        await sendLetterAuthorReminder(
+          author.email,
+          author.name,
+          letter.recipientName,
+          letter.recipientEmail,
+          letter.title,
+          letter.deliverAt,
+          letter.id,
+        );
+
+        await storage.updateFutureLetter(letter.id, { reminderSentAt: new Date() } as any);
+        console.log(`[LETTER-WORKER] Sent delivery reminder for letter ${letter.id} to ${author.email}`);
+      } catch (err) {
+        console.error(`[LETTER-WORKER] Failed to send reminder for letter ${letter.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[LETTER-WORKER] Error checking for upcoming delivery reminders:", err);
+  }
+}
+
 // Deliver sealed-until-passing letters when an Echo transfer executes
 // Called from transfer execution logic
 export async function deliverSealedLetters(personaId: number): Promise<number> {
@@ -143,7 +179,11 @@ export function startLetterDeliveryWorker(): void {
 
   // Run once immediately on startup
   deliverDueLetters();
+  sendUpcomingDeliveryReminders();
 
   // Then run every 5 minutes
-  setInterval(deliverDueLetters, DELIVERY_INTERVAL_MS);
+  setInterval(() => {
+    deliverDueLetters();
+    sendUpcomingDeliveryReminders();
+  }, DELIVERY_INTERVAL_MS);
 }

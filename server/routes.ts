@@ -15,7 +15,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import MemoryStore from "memorystore";
 import Stripe from "stripe";
 import { storage, db } from "./storage";
-import { sendWelcomeEmail, sendHeirInvitationEmail, sendTransferExecutedEmail, sendHeirClaimedEmail, sendLetterDeliveryEmail } from "./email";
+import { sendWelcomeEmail, sendHeirInvitationEmail, sendTransferExecutedEmail, sendHeirClaimedEmail, sendLetterDeliveryEmail, sendLetterAuthorReminder } from "./email";
 import { deliverSealedLetters } from "./letter-worker";
 import {
   insertPersonaSchema,
@@ -3405,6 +3405,68 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/letters/notifications/unread", requireAuth, async (req, res) => {
     const count = await storage.getUnreadNotificationCount(req.user!.id);
     res.json({ count });
+  });
+
+  // Resend a delivered letter
+  app.post("/api/letters/:id/resend", requireAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid letter ID" });
+
+      const letter = await storage.getFutureLetterById(id);
+      if (!letter) return res.status(404).json({ error: "Letter not found" });
+      if (letter.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
+      if (letter.status !== "delivered") return res.status(400).json({ error: "Can only resend delivered letters" });
+
+      // Rate limit: max 3 resends per letter per day
+      const todayCount = await storage.getResendCountToday(id);
+      if (todayCount >= 3) {
+        return res.status(429).json({ error: "Already resent today — try again tomorrow" });
+      }
+
+      const author = await storage.getUserById(letter.userId);
+      const authorName = author?.name || "Someone";
+
+      // Re-send email if recipient email exists
+      if (letter.recipientEmail) {
+        await sendLetterDeliveryEmail(
+          letter.recipientEmail,
+          letter.recipientName,
+          authorName,
+          letter.title,
+          letter.content,
+          letter.createdAt || new Date(),
+          letter.id,
+        );
+      }
+
+      // Create new in-app notification for the recipient
+      const recipientUserId = letter.recipientUserId
+        || (letter.recipientType === "self" ? letter.userId : null);
+      if (recipientUserId) {
+        await storage.createNotification({
+          userId: recipientUserId,
+          type: "letter_delivered",
+          title: `A letter from ${authorName} was resent`,
+          message: letter.title,
+          referenceId: letter.id,
+          read: false,
+        });
+      }
+
+      // Log the resend
+      const resentAt = new Date();
+      await storage.createLetterResend({
+        letterId: id,
+        resentAt,
+        resentBy: req.user!.id,
+      });
+
+      res.json({ success: true, resentAt: resentAt.toISOString() });
+    } catch (err) {
+      console.error("Resend letter error:", err);
+      res.status(500).json({ error: "Failed to resend letter" });
+    }
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
