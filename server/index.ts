@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initDb } from "./storage";
 import { startLetterDeliveryWorker } from "./letter-worker";
+import { isR2Configured, checkR2Connectivity } from "./storage/r2";
 
 const app = express();
 const httpServer = createServer(app);
@@ -67,6 +68,17 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize database tables
   await initDb();
+
+  // Verify R2 storage connectivity at startup
+  if (isR2Configured()) {
+    try {
+      await checkR2Connectivity();
+    } catch (err) {
+      console.error("R2 storage unavailable — new uploads will fall back to local disk");
+    }
+  } else {
+    console.warn("R2 env vars not configured — file uploads will use local disk (ephemeral on Railway!)");
+  }
 
   await registerRoutes(httpServer, app);
 

@@ -526,6 +526,7 @@ export interface IStorage {
   // Media
   getMedia(personaId: number): Promise<Media[]>;
   createMedia(data: InsertMedia): Promise<Media>;
+  updateMedia(id: number, data: Partial<InsertMedia>): Promise<Media | undefined>;
   deleteMedia(id: number): Promise<void>;
 
   // Chat
@@ -741,6 +742,10 @@ export class PgStorage implements IStorage {
   }
   async createMedia(data: InsertMedia): Promise<Media> {
     const [m] = await db.insert(schema.media).values(data).returning();
+    return m;
+  }
+  async updateMedia(id: number, data: Partial<InsertMedia>): Promise<Media | undefined> {
+    const [m] = await db.update(schema.media).set(data).where(eq(schema.media.id, id)).returning();
     return m;
   }
   async deleteMedia(id: number): Promise<void> {
