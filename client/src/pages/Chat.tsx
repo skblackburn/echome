@@ -8,9 +8,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EchoMeLogo } from "@/components/EchoMeLogo";
 import { useToast } from "@/hooks/use-toast";
-import { Send, BookOpen, RotateCcw, Volume2, VolumeX, Loader2, Lightbulb, UserPlus, Settings2 } from "lucide-react";
+import { Send, BookOpen, RotateCcw, Volume2, VolumeX, Loader2, Lightbulb, UserPlus, Settings2, Bot } from "lucide-react";
 import type { Persona, ChatMessage } from "@shared/schema";
 import { cn } from "@/lib/utils";
+
+interface UserPreferences {
+  aiChatEnabled: boolean;
+  aiReflectionsEnabled: boolean;
+  aiPhotoPromptsEnabled: boolean;
+  aiVoiceTranscriptionEnabled: boolean;
+  aiWritingStyleEnabled: boolean;
+}
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -171,6 +179,10 @@ export default function Chat() {
   const [showStarters, setShowStarters] = useState(false);
   const [startersDismissed, setStartersDismissed] = useState(false);
   const [messageLimitHit, setMessageLimitHit] = useState(false);
+
+  const { data: prefs } = useQuery<UserPreferences>({
+    queryKey: ["/api/user/preferences"],
+  });
 
   const { data: persona } = useQuery<Persona>({
     queryKey: ["/api/personas", personaId],
@@ -342,7 +354,34 @@ export default function Chat() {
         </div>
       </header>
 
+      {/* AI chat disabled banner */}
+      {prefs && !prefs.aiChatEnabled && (
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="max-w-sm text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-muted">
+              <Bot className="h-7 w-7 text-muted-foreground" />
+            </div>
+            <h3 className="font-display text-lg font-semibold text-foreground">AI Echo chat is off</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Turn it on in Settings &rarr; AI Features to chat with {persona?.name || "this persona"}.
+              Without it, you can still browse the Folder and add memories.
+            </p>
+            <div className="flex gap-3 justify-center">
+              <Link href="/settings">
+                <Button size="sm" className="gap-1.5">Open Settings</Button>
+              </Link>
+              {!viewerCode && (
+                <Link href={`/persona/${personaId}`}>
+                  <Button variant="outline" size="sm">Back to Echo</Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages area */}
+      {(!prefs || prefs.aiChatEnabled) && (
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
           {messagesLoading && (
@@ -451,6 +490,7 @@ export default function Chat() {
           <div ref={bottomRef} />
         </div>
       </div>
+      )}
 
       {/* Message limit banner */}
       {messageLimitHit && (
@@ -469,7 +509,7 @@ export default function Chat() {
       )}
 
       {/* Input bar */}
-      {!messageLimitHit && (
+      {!messageLimitHit && (!prefs || prefs.aiChatEnabled) && (
         <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur-sm">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3">
             <div className="flex items-end gap-3">

@@ -133,6 +133,12 @@ export default function JournalDetail() {
             </Button>
           </div>
         )}
+        {isVoice && transcriptionStatus === "disabled" && (
+          <div className="rounded-xl bg-muted/50 border border-border p-4 flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Voice transcription is off. Audio is saved.</span>
+            <a href="/#/settings" className="text-xs text-primary underline">Turn on in Settings</a>
+          </div>
+        )}
 
         <div className="text-base text-foreground leading-relaxed whitespace-pre-wrap">{entry.content}</div>
 

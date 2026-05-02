@@ -6,10 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Camera, Upload, Loader2, CheckCircle2 } from "lucide-react";
+import { Camera, Upload, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Link } from "wouter";
 import type { Persona, PhotoMemory } from "@shared/schema";
+
+interface UserPreferences {
+  aiPhotoPromptsEnabled: boolean;
+}
 
 type Step = "select-persona" | "upload" | "loading" | "questions" | "done";
 
@@ -29,6 +34,11 @@ export default function PhotoMemoryNew() {
   const { data: personas = [] } = useQuery<Persona[]>({
     queryKey: ["/api/personas"],
   });
+
+  const { data: userPrefs } = useQuery<UserPreferences>({
+    queryKey: ["/api/user/preferences"],
+  });
+  const aiPromptsEnabled = userPrefs?.aiPhotoPromptsEnabled ?? true;
 
   const { data: limits } = useQuery<{ plan: string; limit: number | null; current: number; remaining: number | null }>({
     queryKey: ["/api/photo-memories/limits"],
@@ -216,9 +226,9 @@ export default function PhotoMemoryNew() {
           <Card className="p-12 text-center space-y-4">
             <Loader2 className="h-10 w-10 mx-auto text-primary animate-spin" />
             <div>
-              <h3 className="font-medium text-foreground">Analyzing your photo...</h3>
+              <h3 className="font-medium text-foreground">{aiPromptsEnabled ? "Analyzing your photo..." : "Uploading your photo..."}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                AI is looking at your photo and generating thoughtful questions
+                {aiPromptsEnabled ? "AI is looking at your photo and generating thoughtful questions" : "Preparing some questions for you to answer"}
               </p>
             </div>
           </Card>
@@ -241,6 +251,12 @@ export default function PhotoMemoryNew() {
                 <p className="text-sm text-muted-foreground mt-1">
                   Answer the questions below to create a rich memory for {persona?.name}
                 </p>
+                {!aiPromptsEnabled && (
+                  <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    <Link href="/settings" className="underline text-primary">Turn on AI photo prompts</Link> to get personalized questions about your photos.
+                  </p>
+                )}
               </div>
 
               {((photoMemory.aiPrompts as string[]) || []).map((question, i) => (

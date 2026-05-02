@@ -364,3 +364,21 @@ export const milestonesObserved = pgTable("milestones_observed", {
 export const insertMilestoneObservedSchema = createInsertSchema(milestonesObserved).omit({ id: true, observedAt: true });
 export type InsertMilestoneObserved = z.infer<typeof insertMilestoneObservedSchema>;
 export type MilestoneObserved = typeof milestonesObserved.$inferSelect;
+
+// ─── User Preferences ─────────────────────────────────────────────────────
+export const userPreferences = pgTable("user_preferences", {
+  userId: integer("user_id").primaryKey(),
+  aiChatEnabled: boolean("ai_chat_enabled").notNull().default(false),
+  aiReflectionsEnabled: boolean("ai_reflections_enabled").notNull().default(false),
+  aiPhotoPromptsEnabled: boolean("ai_photo_prompts_enabled").notNull().default(false),
+  aiVoiceTranscriptionEnabled: boolean("ai_voice_transcription_enabled").notNull().default(false),
+  aiWritingStyleEnabled: boolean("ai_writing_style_enabled").notNull().default(false),
+  emailLetterDelivery: boolean("email_letter_delivery").notNull().default(true),
+  emailMilestones: boolean("email_milestones").notNull().default(true),
+  emailMarketing: boolean("email_marketing").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertUserPreferencesSchema = createInsertSchema(userPreferences);
+export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
+export type UserPreferences = typeof userPreferences.$inferSelect;

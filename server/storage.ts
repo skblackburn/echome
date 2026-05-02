@@ -22,6 +22,7 @@ import type {
   PhotoMemory, InsertPhotoMemory,
   Story, InsertStory,
   MilestoneObserved, InsertMilestoneObserved,
+  UserPreferences, InsertUserPreferences,
   User,
 } from "@shared/schema";
 
@@ -638,6 +639,10 @@ export interface IStorage {
   getUserByStripeCustomerId(customerId: string): Promise<User | undefined>;
   incrementMessageCount(userId: number): Promise<void>;
   getMonthlyMessageCount(userId: number): Promise<number>;
+
+  // User Preferences
+  getUserPreferences(userId: number): Promise<UserPreferences>;
+  updateUserPreferences(userId: number, data: Partial<InsertUserPreferences>): Promise<UserPreferences>;
 }
 
 export class PgStorage implements IStorage {
@@ -1157,6 +1162,24 @@ export class PgStorage implements IStorage {
         AND cm.created_at >= ${firstOfMonth}
     `;
     return parseInt(result[0]?.count || "0", 10);
+  }
+
+  // ── User Preferences ────────────────────────────────────────────────────
+  async getUserPreferences(userId: number): Promise<UserPreferences> {
+    const rows = await db.select().from(schema.userPreferences).where(eq(schema.userPreferences.userId, userId));
+    if (rows[0]) return rows[0];
+    // Auto-create with defaults (AI off for new/missing users)
+    const [prefs] = await db.insert(schema.userPreferences).values({ userId }).returning();
+    return prefs;
+  }
+  async updateUserPreferences(userId: number, data: Partial<InsertUserPreferences>): Promise<UserPreferences> {
+    // Ensure row exists first
+    await this.getUserPreferences(userId);
+    const [updated] = await db.update(schema.userPreferences)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(schema.userPreferences.userId, userId))
+      .returning();
+    return updated;
   }
 }
 
