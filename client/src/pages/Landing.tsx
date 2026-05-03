@@ -152,9 +152,6 @@ export default function Landing() {
               Parents who want their children to have their words — not just photos, not just memories other people tell, but their actual voice. Letters for birthdays they might not see. Stories for milestones they want to be part of, no matter what.
             </p>
             <p>
-              People facing a terminal illness who want to leave more than a will. Who want to leave their humor, their advice, the way they'd say "I'm proud of you" on a hard day. Who want their family to open a letter and feel held, even when they can't be there.
-            </p>
-            <p>
               Families who need a private place for memories that won't get lost in cloud drives, phones, or old email accounts. Somewhere the important things stay together.
             </p>
             <p>
@@ -259,9 +256,6 @@ export default function Landing() {
               </Link>
               <Link href="/privacy">
                 <span className="hover:text-foreground cursor-pointer transition-colors">Privacy</span>
-              </Link>
-              <Link href="/final-folder">
-                <span className="hover:text-foreground cursor-pointer transition-colors">Final Folder</span>
               </Link>
             </div>
           </div>

@@ -7,7 +7,6 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import Home from "@/pages/Home";
 import Landing from "@/pages/Landing";
 import Onboarding from "@/pages/Onboarding";
-import FinalFolder from "@/pages/FinalFolder";
 import CreatePersona from "@/pages/CreatePersona";
 import PersonaDashboard from "@/pages/PersonaDashboard";
 import MemoryIntake from "@/pages/MemoryIntake";
@@ -112,7 +111,6 @@ function AppRoutes() {
         <Route path="/pricing" component={Pricing} />
         <Route path="/faq" component={Faq} />
         <Route path="/privacy" component={Privacy} />
-        <Route path="/final-folder" component={FinalFolder} />
         <Route path="/join" component={JoinEcho} />
         <Route path="/heirs/claim/:token" component={ClaimEcho} />
         <Route path="/persona/:id/chat" component={Chat} />

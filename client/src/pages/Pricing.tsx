@@ -297,16 +297,6 @@ export default function Pricing() {
           Have a promo code? You can enter it at checkout.
         </div>
 
-        {/* Final Folder */}
-        <div className="text-center mt-6 pt-6 border-t border-border">
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            <span className="font-medium text-foreground">Final Folder:</span>{" "}
-            Right-to-die, hospice, and terminal-illness clients — we offer a free Legacy plan, no questions asked.{" "}
-            <Link href="/final-folder">
-              <span className="text-primary hover:underline cursor-pointer">Learn more</span>
-            </Link>
-          </p>
-        </div>
       </div>
     </Layout>
   );
