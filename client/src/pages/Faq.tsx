@@ -386,6 +386,11 @@ const faqSections: FaqSection[] = [
         answer:
           "We may adjust pricing for new subscribers as we grow, but if you're on a plan, we'll grandfather your rate for at least a year and give you plenty of notice before any change. We don't believe in surprising people with price hikes.",
       },
+      {
+        question: "How do I contact Echo Me?",
+        answer:
+          "Email us at support@echome.family. We read every message. For privacy, security, or sensitive concerns about how Echo Me handles your data or your loved ones, please flag it in your subject line and we'll prioritize.",
+      },
     ],
   },
   {
@@ -396,13 +401,13 @@ const faqSections: FaqSection[] = [
         question:
           "I'm grieving — is this app appropriate for me right now?",
         answer:
-          "It depends. Echo Me can be a beautiful place to write to someone you've lost, to keep their voice alive, or to leave letters for the family who'll need you later. But it's not a replacement for grieving, and the AI features in particular can sometimes feel like a way around grief rather than through it. If you're in the early, sharp stages of loss, we'd gently suggest writing to your loved one in your Folder (just letters, no AI) and saving the AI chat for later, if at all. If your grief feels overwhelming, please consider reaching out to a real human — a therapist, a grief group, or a crisis line: 988 (US), 116 123 (UK Samaritans), 9-8-8 (Canada), 13 11 14 (Australia), or findahelpline.com for other countries. Echo Me is here when you're ready, and only if it feels right.",
+          "It depends. Echo Me can be a beautiful place to write to someone you've lost, to keep their voice alive, or to leave letters for the family who'll need you later. But it's not a replacement for grieving, and the AI features in particular can sometimes feel like a way around grief rather than through it. If you're in the early, sharp stages of loss, we'd gently suggest writing to your loved one in your Folder (just letters, no AI) and saving the AI chat for later, if at all. If your grief feels overwhelming, please consider reaching out to a real human — a therapist, a grief group, or a crisis line: 988 (US), 116 123 (UK Samaritans), 9-8-8 (Canada), 13 11 14 (Australia), or findahelpline.com for other countries. You can also reach us at support@echome.family. Echo Me is here when you're ready, and only if it feels right.",
       },
       {
         question:
           "I'm dying. Can I use this to leave things for my family?",
         answer:
-          "Yes — this is one of the most important things Echo Me is for. You can write letters now to be delivered to specific people on specific dates or moments. You can record voice messages or upload photos with stories. You can leave letters for grandchildren who haven't been born yet, for moments you won't be there for. None of this requires AI — it's all your real words, in your real voice, delivered to the people you love.",
+          "Yes — this is one of the most important things Echo Me is for. You can write letters now to be delivered to specific people on specific dates or moments. You can record voice messages or upload photos with stories. You can leave letters for grandchildren who haven't been born yet, for moments you won't be there for. None of this requires AI — it's all your real words, in your real voice, delivered to the people you love. If you need help getting started, email us at support@echome.family.",
       },
       {
         question: "Is Echo Me a substitute for therapy?",
