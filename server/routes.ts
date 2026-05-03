@@ -28,6 +28,8 @@ import * as schema from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
+import * as r2 from "./storage/r2";
+import { processImage, validateImageMimeType } from "./media/image-pipeline";
 import type { User } from "@shared/schema";
 
 // ── Stripe Setup ──────────────────────────────────────────────────────────────
@@ -1132,6 +1134,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
 
       const body = req.body;
+
+      // Create persona first (to get the ID), then upload photo
       const data = insertPersonaSchema.parse({
         name: body.name,
         relationship: body.relationship,
@@ -1152,7 +1156,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         contributorRelationship: "creator",
         perspectiveType: "self",
       });
-      const persona = await storage.createPersona(data);
+      let persona = await storage.createPersona(data);
+
+      // Upload persona photo to R2 if configured
+      if (req.file && r2.isR2Configured()) {
+        try {
+          const inputBuffer = fs.readFileSync(req.file.path);
+          const processed = await processImage(inputBuffer);
+          const key = `personas/${persona.id}/photo.webp`;
+          await r2.uploadObject(key, processed.display, "image/webp");
+          persona = (await storage.updatePersona(persona.id, {
+            photo: r2.getPublicUrl(key),
+            photoStorageProvider: "r2",
+            photoStorageKey: key,
+          } as any))!;
+        } catch (err) {
+          console.error("R2 persona photo upload error:", err);
+          // Local filename already stored from createPersona above
+        } finally {
+          try { fs.unlinkSync(req.file.path); } catch (_) {}
+        }
+      }
+
       res.status(201).json(persona);
     } catch (e) {
       res.status(400).json({ error: String(e) });
@@ -1164,7 +1189,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!persona) return;
     const b = req.body;
     const updates: Record<string, unknown> = {};
-    if (req.file) updates.photo = req.file.filename;
+    if (req.file) {
+      if (r2.isR2Configured()) {
+        try {
+          const inputBuffer = fs.readFileSync(req.file.path);
+          const processed = await processImage(inputBuffer);
+          const key = `personas/${persona.id}/photo-${Date.now()}.webp`;
+          await r2.uploadObject(key, processed.display, "image/webp");
+          updates.photo = r2.getPublicUrl(key);
+          updates.photoStorageProvider = "r2";
+          updates.photoStorageKey = key;
+          // Clean up old R2 object if it was also on R2
+          if (persona.photoStorageProvider === "r2" && persona.photoStorageKey) {
+            r2.deleteObject(persona.photoStorageKey).catch((err) =>
+              console.error("Failed to delete old persona photo from R2:", err)
+            );
+          }
+        } catch (err) {
+          console.error("R2 persona photo update error:", err);
+          updates.photo = req.file.filename; // fallback to local
+        } finally {
+          try { fs.unlinkSync(req.file.path); } catch (_) {}
+        }
+      } else {
+        updates.photo = req.file.filename;
+      }
+    }
     // Explicit field mapping to ensure camelCase → schema alignment
     const fields = ["name","relationship","bio","status","spouse","children",
       "pronouns","birthYear","birthPlace","selfMode","creatorName",
@@ -1324,6 +1374,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!persona) return;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
     try {
+      if (r2.isR2Configured()) {
+        try {
+          const fileBuffer = fs.readFileSync(req.file.path);
+          // Create DB record first to get ID
+          const mediaItem = await storage.createMedia({
+            personaId: persona.id,
+            type: req.body.type || "document",
+            filename: req.file.filename,
+            originalName: req.file.originalname,
+            description: req.body.description || null,
+          });
+
+          const key = `media/${persona.id}/${mediaItem.id}/${req.file.originalname}`;
+          await r2.uploadObject(key, fileBuffer, req.file.mimetype || "application/octet-stream");
+
+          // Update with R2 storage info
+          const updated = await storage.updateMedia(mediaItem.id, {
+            storageProvider: "r2",
+            storageKey: key,
+            sizeBytes: fileBuffer.length,
+          } as any);
+
+          return res.status(201).json(updated || mediaItem);
+        } catch (err) {
+          console.error("R2 media upload error:", err);
+          // Fall through to local storage
+        } finally {
+          try { fs.unlinkSync(req.file.path); } catch (_) {}
+        }
+      }
+
+      // Local storage fallback
       const mediaItem = await storage.createMedia({
         personaId: persona.id,
         type: req.body.type || "document",
@@ -3056,19 +3138,134 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "No audio file uploaded" });
       }
 
-      // Move file to user-specific directory
-      const userDir = path.join(process.cwd(), "uploads/journal-audio", String(userId));
-      if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
-      const finalPath = path.join(userDir, req.file.filename);
-      fs.renameSync(req.file.path, finalPath);
-
-      const audioUrl = `/uploads/journal-audio/${userId}/${req.file.filename}`;
       const durationSeconds = req.body.duration ? parseInt(req.body.duration) : null;
       const today = new Date().toISOString().split("T")[0];
 
       // Check voice transcription preference
       const voicePrefs = await storage.getUserPreferences(userId);
       const transcriptionEnabled = voicePrefs.aiVoiceTranscriptionEnabled;
+
+      // Upload to R2 if configured, otherwise use local disk
+      let audioUrl: string;
+      let audioStorageProvider = "local";
+      let audioStorageKey: string | null = null;
+      let audioSizeBytes: number | null = null;
+      let localAudioPath: string;
+
+      if (r2.isR2Configured()) {
+        try {
+          const audioBuffer = fs.readFileSync(req.file.path);
+          audioSizeBytes = audioBuffer.length;
+          // Create entry first to get ID
+          const tempEntry = await storage.createJournalEntry({
+            userId,
+            title: req.body.title || null,
+            content: transcriptionEnabled ? "(Transcribing...)" : "",
+            entryDate: req.body.entryDate || today,
+            mood: req.body.mood || null,
+            includedInEcho: false,
+            echoPersonaId: null,
+            linkedMemoryId: null,
+            reflectionCount: 0,
+            aiReflections: null,
+            audioUrl: "(pending-r2)",
+            audioDurationSeconds: durationSeconds,
+            transcriptionStatus: transcriptionEnabled ? "pending" : "disabled",
+            entryType: "voice",
+          });
+
+          const ext = path.extname(req.file.originalname) || ".webm";
+          const key = `audio/${userId}/${tempEntry.id}/${req.file.filename}${ext === path.extname(req.file.filename) ? "" : ""}`;
+          const r2Key = `audio/${userId}/${tempEntry.id}/${req.file.filename}`;
+          await r2.uploadObject(r2Key, audioBuffer, req.file.mimetype || "audio/webm");
+
+          audioUrl = r2Key; // store key, not URL — presigned URLs generated on serve
+          audioStorageProvider = "r2";
+          audioStorageKey = r2Key;
+
+          await storage.updateJournalEntry(tempEntry.id, {
+            audioUrl: r2Key,
+            audioStorageProvider: "r2",
+            audioStorageKey: r2Key,
+            audioSizeBytes,
+          } as any);
+
+          // Keep temp file for Whisper transcription, clean up after
+          localAudioPath = req.file.path;
+
+          // Return entry immediately, transcribe async
+          const entry = await storage.getJournalEntryById(tempEntry.id);
+          res.json(entry);
+
+          // Async transcription (only if AI transcription is enabled)
+          if (openai && transcriptionEnabled) {
+            try {
+              const audioStream = fs.createReadStream(localAudioPath);
+              const transcription = await openai.audio.transcriptions.create({
+                model: "whisper-1",
+                file: audioStream,
+              });
+              const transcript = transcription.text || "";
+              await storage.updateJournalEntry(tempEntry.id, {
+                content: transcript,
+                transcriptionStatus: "completed",
+              });
+
+              if (req.body.includedInEcho === "true" && req.body.echoPersonaId) {
+                const echoPersonaId = parseInt(req.body.echoPersonaId);
+                const echoPersona = await storage.getPersona(echoPersonaId);
+                if (echoPersona && echoPersona.userId === userId && transcript.trim()) {
+                  const memory = await storage.createMemory({
+                    personaId: echoPersonaId,
+                    type: "document",
+                    title: req.body.title || `Voice Journal: ${tempEntry.entryDate}`,
+                    content: transcript.trim(),
+                    period: null,
+                    tags: null,
+                    documentType: "voice",
+                    contributedBy: null,
+                    contributorCode: null,
+                    contributorUserId: userId,
+                    contributorRelationship: "self",
+                    perspectiveType: "self",
+                  });
+                  await storage.updateJournalEntry(tempEntry.id, {
+                    includedInEcho: true,
+                    echoPersonaId,
+                    linkedMemoryId: memory.id,
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("Whisper transcription error:", err);
+              await storage.updateJournalEntry(tempEntry.id, {
+                content: "(Transcription failed)",
+                transcriptionStatus: "failed",
+              });
+            } finally {
+              try { fs.unlinkSync(localAudioPath); } catch (_) {}
+            }
+          } else {
+            await storage.updateJournalEntry(tempEntry.id, {
+              content: "(Transcription unavailable — OpenAI not configured)",
+              transcriptionStatus: "failed",
+            });
+            try { fs.unlinkSync(localAudioPath); } catch (_) {}
+          }
+          return; // already sent response
+        } catch (err) {
+          console.error("R2 audio upload error:", err);
+          // Fall through to local storage
+        }
+      }
+
+      // Local storage fallback
+      const userDir = path.join(process.cwd(), "uploads/journal-audio", String(userId));
+      if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+      const finalPath = path.join(userDir, req.file.filename);
+      fs.renameSync(req.file.path, finalPath);
+
+      audioUrl = `/uploads/journal-audio/${userId}/${req.file.filename}`;
 
       // Create entry — if transcription disabled, store audio without calling Whisper
       const entry = await storage.createJournalEntry({
@@ -3161,6 +3358,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (entry.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
     if (!entry.audioUrl) return res.status(404).json({ error: "No audio for this entry" });
 
+    // R2 storage — always use presigned URL for audio (sensitive content)
+    if ((entry as any).audioStorageProvider === "r2" && (entry as any).audioStorageKey) {
+      try {
+        const url = await r2.getPresignedGetUrl((entry as any).audioStorageKey, 3600);
+        return res.redirect(302, url);
+      } catch (err) {
+        console.error("R2 audio serve error:", err);
+        return res.status(500).json({ error: "Failed to serve audio from storage" });
+      }
+    }
+
+    // Local storage fallback
     const filePath = path.join(process.cwd(), entry.audioUrl);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Audio file not found" });
 
@@ -3184,13 +3393,28 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!entry.audioUrl) return res.status(400).json({ error: "No audio file to transcribe" });
     if (!openai) return res.status(503).json({ error: "Transcription service not available" });
 
-    const filePath = path.join(process.cwd(), entry.audioUrl);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Audio file not found" });
-
     await storage.updateJournalEntry(entryId, { transcriptionStatus: "pending" });
 
     try {
-      const audioStream = fs.createReadStream(filePath);
+      let audioStream: any;
+
+      // For R2-stored audio, get a presigned URL and fetch the stream
+      if ((entry as any).audioStorageProvider === "r2" && (entry as any).audioStorageKey) {
+        const presignedUrl = await r2.getPresignedGetUrl((entry as any).audioStorageKey, 300);
+        const response = await fetch(presignedUrl);
+        if (!response.ok) throw new Error(`Failed to fetch audio from R2: ${response.status}`);
+        // Whisper API accepts a File-like object; use a Blob from the response
+        const arrayBuffer = await response.arrayBuffer();
+        const blob = new Blob([arrayBuffer]);
+        // Create a File object for the OpenAI SDK
+        audioStream = new File([blob], "audio.webm", { type: "audio/webm" });
+      } else {
+        // Local storage
+        const filePath = path.join(process.cwd(), entry.audioUrl);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Audio file not found" });
+        audioStream = fs.createReadStream(filePath);
+      }
+
       const transcription = await openai.audio.transcriptions.create({
         model: "whisper-1",
         file: audioStream,
@@ -3495,9 +3719,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: (_req: any, file: any, cb: any) => {
-      const allowed = ["image/jpeg", "image/png", "image/webp"];
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
       if (allowed.includes(file.mimetype)) cb(null, true);
-      else cb(new Error("Only jpg, png, and webp images are allowed"));
+      else cb(new Error("Only jpg, png, webp, heic, and heif images are allowed"));
     },
   });
 
@@ -3519,6 +3743,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     if (!req.file) return res.status(400).json({ error: "No photo uploaded" });
 
+    // Validate MIME type for Sharp pipeline
+    const mimeError = validateImageMimeType(req.file.mimetype);
+    if (mimeError) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: mimeError });
+    }
+
     // Tier limit check (free = 3 lifetime)
     const user = await storage.getUserById(userId);
     const plan = user?.plan || "free";
@@ -3537,19 +3768,25 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
     }
 
-    const photoUrl = `/uploads/photo-memories/${userId}/${req.file.filename}`;
+    // Read file into buffer (used for Sharp + AI Vision — avoids R2 roundtrip)
+    const inputBuffer = fs.readFileSync(req.file.path);
 
     // Check AI photo prompts preference
     const photoPrefs = await storage.getUserPreferences(userId);
     const aiPhotoEnabled = photoPrefs.aiPhotoPromptsEnabled;
 
-    // Generate AI questions from the photo (only if AI photo prompts are enabled)
+    // Generate AI questions from the raw upload BEFORE R2 upload (no roundtrip)
     let aiPrompts: string[] = [];
     try {
       if (openai && aiPhotoEnabled) {
-        const imageBuffer = fs.readFileSync(req.file.path);
-        const base64 = imageBuffer.toString("base64");
-        const mimeType = req.file.mimetype || "image/jpeg";
+        // For Vision API, send display-quality WebP (smaller, faster)
+        // For HEIC inputs, we must convert since OpenAI doesn't support HEIC
+        const visionBuffer = await (await import("sharp")).default(inputBuffer)
+          .rotate()
+          .resize(1600, 1600, { fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 80 })
+          .toBuffer();
+        const base64 = visionBuffer.toString("base64");
 
         const completion = await openai.chat.completions.create({
           model: "gpt-4o-mini",
@@ -3562,7 +3799,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
               },
               {
                 type: "image_url",
-                image_url: { url: `data:${mimeType};base64,${base64}` },
+                image_url: { url: `data:image/webp;base64,${base64}` },
               },
             ],
           }],
@@ -3591,6 +3828,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ];
     }
 
+    // R2 upload path — process through Sharp and upload all variants
+    if (r2.isR2Configured()) {
+      try {
+        const processed = await processImage(inputBuffer);
+
+        // Create DB record first to get the ID, then upload to R2
+        const photoMemory = await storage.createPhotoMemory({
+          userId,
+          personaId,
+          photoUrl: "(pending-r2)", // temporary — updated below
+          aiPrompts,
+          userResponses: null,
+          status: "draft",
+          linkedMemoryId: null,
+        });
+
+        const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
+        const baseKey = `photos/${personaId}/${photoMemory.id}`;
+        const displayKey = `${baseKey}/display.webp`;
+        const thumbnailKey = `${baseKey}/thumbnail.webp`;
+        const originalKey = `${baseKey}/original${ext}`;
+
+        await Promise.all([
+          r2.uploadObject(displayKey, processed.display, "image/webp"),
+          r2.uploadObject(thumbnailKey, processed.thumbnail, "image/webp"),
+          r2.uploadObject(originalKey, processed.original, req.file.mimetype),
+        ]);
+
+        // Update the record with R2 keys and metadata
+        const updated = await storage.updatePhotoMemory(photoMemory.id, {
+          photoUrl: r2.getPublicUrl(displayKey),
+          photoThumbnailUrl: r2.getPublicUrl(thumbnailKey),
+          storageProvider: "r2",
+          storageKey: displayKey,
+          originalKey,
+          thumbnailKey,
+          originalSizeBytes: processed.original.length,
+          displaySizeBytes: processed.display.length,
+          width: processed.width,
+          height: processed.height,
+          mimeType: processed.mimeType,
+        });
+
+        return res.status(201).json(updated);
+      } catch (err) {
+        console.error("R2 photo upload error:", err);
+        // Fall through to local storage as fallback
+      } finally {
+        // Always clean up temp file
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+      }
+    }
+
+    // Local storage fallback (legacy path — no R2 configured or R2 upload failed)
+    const photoUrl = `/uploads/photo-memories/${userId}/${req.file.filename}`;
     const photoMemory = await storage.createPhotoMemory({
       userId,
       personaId,
@@ -3684,6 +3976,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // GET /api/photo-memories/photo/:id — serve photo with auth
+  // Supports ?variant=original|thumbnail|display (default: display)
   app.get("/api/photo-memories/photo/:id", requireAuth, async (req, res) => {
     const id = parseInt(req.params.id);
     if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
@@ -3691,6 +3984,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!pm) return res.status(404).json({ error: "Not found" });
     if (pm.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
 
+    // R2 storage — redirect to public URL (display/thumbnail) or presigned (original)
+    if ((pm as any).storageProvider === "r2") {
+      try {
+        const variant = (req.query.variant as string) || "display";
+        if (variant === "original" && (pm as any).originalKey) {
+          // Original always served via presigned URL (sensitive, full-res)
+          const url = await r2.getPresignedGetUrl((pm as any).originalKey, 3600);
+          return res.redirect(302, url);
+        } else if (variant === "thumbnail" && (pm as any).thumbnailKey) {
+          return res.redirect(302, r2.getPublicUrl((pm as any).thumbnailKey));
+        } else if ((pm as any).storageKey) {
+          return res.redirect(302, r2.getPublicUrl((pm as any).storageKey));
+        }
+      } catch (err) {
+        console.error("R2 photo serve error:", err);
+        return res.status(500).json({ error: "Failed to serve photo from storage" });
+      }
+    }
+
+    // Local storage fallback
     const filePath = path.join(process.cwd(), pm.photoUrl);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Photo file not found" });
     res.sendFile(filePath);
@@ -3709,9 +4022,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       await storage.deleteMemory(pm.linkedMemoryId);
     }
 
-    // Delete photo file
-    const filePath = path.join(process.cwd(), pm.photoUrl);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // Delete files from R2 or local disk
+    if ((pm as any).storageProvider === "r2") {
+      const keys = [(pm as any).storageKey, (pm as any).originalKey, (pm as any).thumbnailKey].filter(Boolean);
+      await Promise.all(
+        keys.map((key: string) =>
+          r2.deleteObject(key).catch((err) => console.error(`Failed to delete R2 object ${key}:`, err))
+        )
+      );
+    } else {
+      // Local storage cleanup
+      const filePath = path.join(process.cwd(), pm.photoUrl);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
 
     await storage.deletePhotoMemory(id);
     res.json({ success: true });
