@@ -336,7 +336,7 @@ const faqSections: FaqSection[] = [
       {
         question: "How does the coupon code work?",
         answer:
-          "If you have a beta coupon code (like BETA2026), enter it on the pricing page when choosing a plan. The coupon will unlock the Legacy tier (10 Echoes, unlimited messages) for free for 6 months. After 6 months, you can choose to continue on a paid plan or switch to the free tier.",
+          "If you have a coupon code, enter it on the pricing page when choosing a plan. The coupon will apply the corresponding discount to your subscription. After the coupon period ends, you can choose to continue on a paid plan or switch to the free tier.",
       },
       {
         question: "What happens if I cancel my account?",
@@ -390,7 +390,7 @@ const faqSections: FaqSection[] = [
         question:
           "I'm dying. Can I use this to leave things for my family?",
         answer:
-          "Yes — this is one of the most important things Echo Me is for. You can write letters now to be delivered to specific people on specific dates or moments. You can record voice messages or upload photos with stories. You can leave letters for grandchildren who haven't been born yet, for moments you won't be there for. None of this requires AI — it's all your real words, in your real voice, delivered to the people you love. If you'd like access for free, please reach out — we have a program for that.",
+          "Yes — this is one of the most important things Echo Me is for. You can write letters now to be delivered to specific people on specific dates or moments. You can record voice messages or upload photos with stories. You can leave letters for grandchildren who haven't been born yet, for moments you won't be there for. None of this requires AI — it's all your real words, in your real voice, delivered to the people you love.",
       },
       {
         question: "Is Echo Me a substitute for therapy?",

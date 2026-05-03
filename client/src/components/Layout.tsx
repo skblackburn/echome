@@ -149,9 +149,6 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
           <Link href="/faq">
             <span className="hover:text-foreground cursor-pointer transition-colors">FAQ</span>
           </Link>
-          <Link href="/final-folder">
-            <span className="hover:text-foreground cursor-pointer transition-colors">Final Folder</span>
-          </Link>
         </div>
       </footer>
     </div>
