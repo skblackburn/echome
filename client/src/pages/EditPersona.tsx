@@ -203,7 +203,7 @@ export default function EditPersona() {
         {/* Name */}
         <div className="space-y-1.5">
           <Label>Full name <span className="text-destructive">*</span></Label>
-          <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Norah Kealoha" />
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Maria Santos" />
         </div>
 
         {/* Pronouns */}

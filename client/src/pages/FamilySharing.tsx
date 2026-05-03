@@ -159,7 +159,7 @@ export default function FamilySharing() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Name <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g., Eowyn" value={name} onChange={e => setName(e.target.value)} />
+                <Input placeholder="e.g., Emma" value={name} onChange={e => setName(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Relationship <span className="text-destructive">*</span></Label>
