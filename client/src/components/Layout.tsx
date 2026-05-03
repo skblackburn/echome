@@ -149,6 +149,9 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
           <Link href="/faq">
             <span className="hover:text-foreground cursor-pointer transition-colors">FAQ</span>
           </Link>
+          <a href="mailto:support@echome.family" className="hover:text-foreground transition-colors">
+            Contact: support@echome.family
+          </a>
         </div>
       </footer>
     </div>

@@ -257,6 +257,9 @@ export default function Landing() {
               <Link href="/privacy">
                 <span className="hover:text-foreground cursor-pointer transition-colors">Privacy</span>
               </Link>
+              <a href="mailto:support@echome.family" className="hover:text-foreground transition-colors">
+                Contact: support@echome.family
+              </a>
             </div>
           </div>
           <p className="text-xs text-muted-foreground/60 text-center mt-6">
