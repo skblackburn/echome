@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import {
   Accordion,
@@ -440,6 +441,14 @@ const faqSections: FaqSection[] = [
 ];
 
 export default function Faq() {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+    const section = params.get("s");
+    if (section) {
+      document.getElementById(section)?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
@@ -469,7 +478,14 @@ export default function Faq() {
             {faqSections.map((section) => (
               <li key={section.id}>
                 <a
-                  href={`#${section.id}`}
+                  href={`#/faq?s=${section.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document
+                      .getElementById(section.id)
+                      ?.scrollIntoView({ behavior: "smooth" });
+                    history.replaceState(null, "", `#/faq?s=${section.id}`);
+                  }}
                   className="text-sm text-primary hover:underline"
                 >
                   {section.title}
