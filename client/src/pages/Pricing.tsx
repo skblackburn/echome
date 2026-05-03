@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,9 +27,23 @@ const tiers = [
     annualPrice: 0,
     monthlyPriceId: null,
     annualPriceId: null,
-    echoes: "1 Echo",
-    messages: "20 messages/month",
-    features: ["1 Echo persona", "20 messages/month", "Memory archive", "Voice recordings", "Unlimited journal entries", "Unlimited letters to the future", "3 AI reflections per month", "1 milestone message", "1 heir per Echo"],
+    echoes: "1 Folder",
+    messages: "20 AI messages/month",
+    features: [
+      "1 Folder (letters & stories for one person)",
+      "Unlimited letters to the future",
+      "Unlimited journal entries",
+      "Voice recordings",
+      "Photo memories",
+      "1 milestone message",
+      "1 heir per Folder",
+      "Memory archive",
+    ],
+    aiFeatures: [
+      "1 AI Echo persona",
+      "20 AI messages/month",
+      "3 AI reflections/month",
+    ],
   },
   {
     name: "Personal",
@@ -38,9 +52,25 @@ const tiers = [
     annualPrice: 89,
     monthlyPriceId: "price_1TMBkv8vT1Bw3iGUdGojRSkO",
     annualPriceId: "price_1TMBkw8vT1Bw3iGUqB6rTbmp",
-    echoes: "1 Echo",
-    messages: "Unlimited",
-    features: ["1 Echo persona", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Unlimited journal entries", "Unlimited letters to the future", "Unlimited AI reflections", "5 milestone messages", "Up to 3 heirs per Echo"],
+    echoes: "1 Folder",
+    messages: "Unlimited AI messages",
+    features: [
+      "1 Folder (letters & stories for one person)",
+      "Unlimited letters to the future",
+      "Unlimited journal entries",
+      "Voice recordings",
+      "Photo memories",
+      "Document uploads",
+      "5 milestone messages",
+      "Up to 3 heirs per Folder",
+      "Memory archive",
+    ],
+    aiFeatures: [
+      "1 AI Echo persona",
+      "Unlimited AI messages",
+      "Unlimited AI reflections",
+      "Writing-style analysis",
+    ],
   },
   {
     name: "Family",
@@ -49,10 +79,27 @@ const tiers = [
     annualPrice: 149,
     monthlyPriceId: "price_1TMBkw8vT1Bw3iGUmtP8rs4J",
     annualPriceId: "price_1TMBkx8vT1Bw3iGUpWldtaK1",
-    echoes: "5 Echoes",
-    messages: "Unlimited",
+    echoes: "5 Folders",
+    messages: "Unlimited AI messages",
     popular: true,
-    features: ["Up to 5 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "Unlimited journal entries", "Unlimited letters to the future", "Unlimited AI reflections", "15 milestone messages", "Up to 5 heirs per Echo"],
+    features: [
+      "Up to 5 Folders (one per person)",
+      "Unlimited letters to the future",
+      "Unlimited journal entries",
+      "Voice recordings",
+      "Photo memories",
+      "Document uploads",
+      "Family sharing & access codes",
+      "15 milestone messages",
+      "Up to 5 heirs per Folder",
+      "Memory archive",
+    ],
+    aiFeatures: [
+      "Up to 5 AI Echo personas",
+      "Unlimited AI messages",
+      "Unlimited AI reflections",
+      "Writing-style analysis",
+    ],
   },
   {
     name: "Legacy",
@@ -61,9 +108,26 @@ const tiers = [
     annualPrice: 219,
     monthlyPriceId: "price_1TMBkx8vT1Bw3iGUrocyUuqD",
     annualPriceId: "price_1TMBky8vT1Bw3iGU4SvvuG58",
-    echoes: "10 Echoes",
-    messages: "Unlimited",
-    features: ["Up to 10 Echo personas", "Unlimited messages", "Memory archive", "Voice recordings", "Document uploads", "Writing style analysis", "Family sharing & access codes", "Unlimited journal entries", "Unlimited letters to the future", "Unlimited AI reflections", "Unlimited milestone messages", "Up to 10 heirs per Echo"],
+    echoes: "10 Folders",
+    messages: "Unlimited AI messages",
+    features: [
+      "Up to 10 Folders (one per person)",
+      "Unlimited letters to the future",
+      "Unlimited journal entries",
+      "Voice recordings",
+      "Photo memories",
+      "Document uploads",
+      "Family sharing & access codes",
+      "Unlimited milestone messages",
+      "Up to 10 heirs per Folder",
+      "Memory archive",
+    ],
+    aiFeatures: [
+      "Up to 10 AI Echo personas",
+      "Unlimited AI messages",
+      "Unlimited AI reflections",
+      "Writing-style analysis",
+    ],
   },
 ];
 
@@ -116,10 +180,10 @@ export default function Pricing() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="font-display text-3xl font-semibold text-foreground mb-3">
-            Choose your plan
+            The Folder is unlimited on every plan.
           </h1>
-          <p className="text-muted-foreground text-base max-w-md mx-auto">
-            Preserve the voices that matter most. Start free, upgrade anytime.
+          <p className="text-muted-foreground text-base max-w-lg mx-auto mb-3">
+            Write as many letters and stories as you want, on every tier — including Free. AI features are optional. You can use Echo Me entirely without AI.
           </p>
         </div>
 
@@ -198,6 +262,21 @@ export default function Pricing() {
                       <span className="text-muted-foreground">{feature}</span>
                     </li>
                   ))}
+                  {(tier as any).aiFeatures && (tier as any).aiFeatures.length > 0 && (
+                    <>
+                      <li className="pt-2 pb-1">
+                        <span className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wide">
+                          Optional AI — off by default
+                        </span>
+                      </li>
+                      {(tier as any).aiFeatures.map((feature: string) => (
+                        <li key={feature} className="flex items-start gap-2 text-sm">
+                          <Sparkles className="h-4 w-4 text-muted-foreground/50 flex-shrink-0 mt-0.5" />
+                          <span className="text-muted-foreground">{feature}</span>
+                        </li>
+                      ))}
+                    </>
+                  )}
                 </ul>
 
                 <Button
@@ -216,6 +295,17 @@ export default function Pricing() {
         {/* Promo code note */}
         <div className="text-center mt-8 text-sm text-muted-foreground">
           Have a promo code? You can enter it at checkout.
+        </div>
+
+        {/* Final Folder */}
+        <div className="text-center mt-6 pt-6 border-t border-border">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            <span className="font-medium text-foreground">Final Folder:</span>{" "}
+            Right-to-die, hospice, and terminal-illness clients — we offer a free Legacy plan, no questions asked.{" "}
+            <Link href="/final-folder">
+              <span className="text-primary hover:underline cursor-pointer">Learn more</span>
+            </Link>
+          </p>
         </div>
       </div>
     </Layout>

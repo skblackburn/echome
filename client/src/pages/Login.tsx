@@ -43,7 +43,7 @@ export default function Login() {
           </div>
           <EchoMeWordmark className="h-6 text-foreground" />
           <p className="text-sm text-muted-foreground text-center">
-            Welcome back. Your Echoes are waiting.
+            Welcome back. Your Folder is waiting.
           </p>
         </div>
 

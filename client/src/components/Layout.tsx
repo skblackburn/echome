@@ -114,9 +114,9 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
                     <CreditCard className="h-3.5 w-3.5" />
                   </Button>
                 </Link>
-                <Link href="/account">
+                <Link href="/settings">
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    title="Account settings">
+                    title="Settings">
                     <Settings className="h-3.5 w-3.5" />
                   </Button>
                 </Link>
@@ -139,6 +139,21 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
       <main className="flex-1">
         {children}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border py-6 mt-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+          <Link href="/privacy">
+            <span className="hover:text-foreground cursor-pointer transition-colors">Privacy</span>
+          </Link>
+          <Link href="/faq">
+            <span className="hover:text-foreground cursor-pointer transition-colors">FAQ</span>
+          </Link>
+          <Link href="/final-folder">
+            <span className="hover:text-foreground cursor-pointer transition-colors">Final Folder</span>
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

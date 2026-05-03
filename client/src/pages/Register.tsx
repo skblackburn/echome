@@ -28,7 +28,7 @@ export default function Register() {
     try {
       await register(email, password, name);
       toast({ title: "Welcome!", description: "Check your email for getting started tips." });
-      navigate("/");
+      navigate("/onboarding");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -47,8 +47,9 @@ export default function Register() {
             <EchoMeLogo size={22} className="text-primary" />
           </div>
           <EchoMeWordmark className="h-6 text-foreground" />
+          <h1 className="font-display text-xl font-semibold text-foreground">Start your Folder.</h1>
           <p className="text-sm text-muted-foreground text-center">
-            Create an account to start preserving the people you love.
+            A private place for letters, stories, voice notes, and photos for the people you love.
           </p>
         </div>
 
@@ -118,7 +119,10 @@ export default function Register() {
         </form>
 
         <p className="text-xs text-muted-foreground text-center leading-relaxed">
-          By creating an account you agree to keep your Echoes private and use them with care for the people they represent.
+          AI features are off by default. You can turn them on later in Settings.
+        </p>
+        <p className="text-xs text-muted-foreground/70 text-center leading-relaxed">
+          By creating an account you agree to keep your Folder private and use it with care for the people it represents.
         </p>
 
         <div className="text-center text-sm text-muted-foreground">
