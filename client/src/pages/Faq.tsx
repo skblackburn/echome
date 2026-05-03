@@ -26,7 +26,7 @@ const faqSections: FaqSection[] = [
       {
         question: "What is Echo Me?",
         answer:
-          "Echo Me is a place to keep the voices that matter most — your own, and the people you love. You can write letters to be delivered in the future, keep a private journal, record voice entries, save photo memories, and — if you choose — build an AI Echo that captures how someone writes and speaks. It was built by a mother who wanted her daughter to always have her words, no matter what.",
+          "Echo Me is a place to keep the voices that matter most — your own, and the people you love. You can write letters to be delivered in the future, keep a private journal, record voice entries, save photo memories, and — if you choose — build an AI Echo that captures how someone writes and speaks. We built it for families who want a private place for letters, stories, and memories that won't get lost.",
       },
       {
         question: "Do I have to use AI to use Echo Me?",
@@ -266,9 +266,9 @@ const faqSections: FaqSection[] = [
       },
       {
         question:
-          "What if I want to leave my Folder to someone who doesn't have an account yet?",
+          "What if I want to leave my Folder to someone who doesn't have an account?",
         answer:
-          "You can designate anyone as an heir by their email address — they don't need an account now. When the time comes, they'll be invited to create an account to claim what you've left them. This works well for young children or people who aren't yet familiar with Echo Me.",
+          "They don't need an account today. When your Folder is released to them, they'll get an email inviting them to create a free Echo Me account. The free tier is enough to receive everything you left — letters, photos, voice notes, stories. They can keep their inherited Folder forever on the free tier. No payment required, ever.",
       },
       {
         question: "Can my heirs add their own memories to an Echo?",
@@ -280,6 +280,12 @@ const faqSections: FaqSection[] = [
           "What if my heirs disagree about what should be in an Echo?",
         answer:
           "This is a real concern, and one we've thought about. When an Echo has multiple heirs, each heir can fork their own private copy of the Echo to add or change material — this way, no heir's vision overrides another's. The original Echo stays as the parent created it, and each fork carries the heir's name. If you'd like family conversations about what stays in the original, that's between you all — we just make sure no single heir can erase what another remembers.",
+      },
+      {
+        question:
+          "How does someone inherit my Folder? What's the verification process?",
+        answer:
+          "We're designing this carefully. For beta, heirs are added by the original user with an email and relationship. When we move to production, the inheritance flow will involve trusted contacts and confirmation of passing (such as a death certificate) before sealed content is released. We'll never release a Folder without proper verification.\n\nIf you have specific concerns about how this should work for your situation, reach out — we're listening.",
       },
     ],
   },
@@ -300,7 +306,7 @@ const faqSections: FaqSection[] = [
       {
         question: "Can the Echo Me team read my letters?",
         answer:
-          "Right now, yes — technically. Your letters and stories live on our servers, and our small team has access for things like fixing bugs and helping with account recovery. We don't read your letters, and we never will without a clear reason (like a legal request we'd notify you about, or a bug we needed to investigate with your permission). Later this year we're adding modes where your data is encrypted in a way even we can't unlock — so you'll have the choice to make this technically impossible. Until then, we ask you to trust us, and we promise to deserve that trust.",
+          "During beta: technically, yes — our small team has database access, which means they could read what you write. We use this access only to debug issues, fix bugs, and make sure features work — never for any other reason, never shared.\n\nAs we move out of beta: we're working toward end-to-end encryption for sealed-until-passing letters and a Local Only privacy mode where your writing never leaves your device. These are on the roadmap for late 2026.\n\nWhat we will never do: sell your data, train AI models on your letters, or give anyone access without your permission.\n\nFor maximum privacy now: keep your Folder set to 'sealed until passing' and turn off AI features in Settings. Your letters still live on our servers but aren't read unless we have a specific debug reason.",
       },
       {
         question: "Where is my data stored?",
@@ -333,6 +339,11 @@ const faqSections: FaqSection[] = [
     id: "billing",
     title: "Account, billing & subscription",
     items: [
+      {
+        question: "Can my friend just sign up?",
+        answer:
+          "Yes. Anyone can sign up for a free Echo Me account at app.echome.family — no payment, no credit card. The free tier includes one persona, unlimited letters and stories in The Folder, voice journaling (5/month), photo memories (3 lifetime), and AI reflections (3/month, if you turn AI on). It's a real free tier, not a trial — keep it free forever if it meets your needs.",
+      },
       {
         question: "How does the coupon code work?",
         answer:
@@ -384,7 +395,7 @@ const faqSections: FaqSection[] = [
         question:
           "I'm grieving — is this app appropriate for me right now?",
         answer:
-          "It depends. Echo Me can be a beautiful place to write to someone you've lost, to keep their voice alive, or to leave letters for the family who'll need you later. But it's not a replacement for grieving, and the AI features in particular can sometimes feel like a way around grief rather than through it. If you're in the early, sharp stages of loss, we'd gently suggest writing to your loved one in your Folder (just letters, no AI) and saving the AI chat for later, if at all. If your grief feels overwhelming, please consider reaching out to a real human — a therapist, a grief group, or a hotline like 988 (US). Echo Me is here when you're ready, and only if it feels right.",
+          "It depends. Echo Me can be a beautiful place to write to someone you've lost, to keep their voice alive, or to leave letters for the family who'll need you later. But it's not a replacement for grieving, and the AI features in particular can sometimes feel like a way around grief rather than through it. If you're in the early, sharp stages of loss, we'd gently suggest writing to your loved one in your Folder (just letters, no AI) and saving the AI chat for later, if at all. If your grief feels overwhelming, please consider reaching out to a real human — a therapist, a grief group, or a crisis line: 988 (US), 116 123 (UK Samaritans), 9-8-8 (Canada), 13 11 14 (Australia), or findahelpline.com for other countries. Echo Me is here when you're ready, and only if it feels right.",
       },
       {
         question:
@@ -395,13 +406,13 @@ const faqSections: FaqSection[] = [
       {
         question: "Is Echo Me a substitute for therapy?",
         answer:
-          "No. Echo Me is a place to write, remember, and preserve — but it's not therapy and shouldn't replace professional support. If you're struggling, please reach out to a licensed therapist or call 988 (the Suicide and Crisis Lifeline in the US). Writing can be part of healing, but it works best alongside real human connection, not instead of it.",
+          "No. Echo Me is a place to write, remember, and preserve — but it's not therapy and shouldn't replace professional support. If you're struggling, please reach out to a licensed therapist or a crisis line: 988 (Suicide and Crisis Lifeline, US — call or text, 24/7), 116 123 (Samaritans, UK), 9-8-8 (Talk Suicide Canada), 13 11 14 (Lifeline Australia), or findahelpline.com for an international directory. If you are in immediate danger, call your local emergency number. Writing can be part of healing, but it works best alongside real human connection, not instead of it.",
       },
       {
         question:
           "What if I write something concerning in a journal entry?",
         answer:
-          "Your journal is private and we don't monitor its contents. But if you or someone you know is in crisis, please reach out to 988 (call or text) or the Crisis Text Line (text HOME to 741741). Echo Me is a place for your words, but real humans are better equipped to help in a crisis.",
+          "Your journal is private and we don't monitor its contents. But if you or someone you know is in crisis, please reach out: 988 (call or text, US), Crisis Text Line (text HOME to 741741, US), 116 123 (UK Samaritans), 9-8-8 (Canada), 13 11 14 (Australia), or findahelpline.com for other countries. If you are in immediate danger, call your local emergency number. Echo Me is a place for your words, but real humans are better equipped to help in a crisis.",
       },
       {
         question:
@@ -452,11 +463,10 @@ export default function Faq() {
             Frequently Asked Questions
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto">
-            Echo Me started as a letter from a mother to her daughter —
-            a way to make sure her words would be there even if she
-            couldn't be. It's grown into something bigger, but the heart
-            is the same: your words, kept safe, delivered when they
-            matter most. Here's everything you might want to know.
+            Echo Me was built for families who want a private place for
+            letters, stories, and memories that won't get lost. Your words,
+            kept safe, delivered when they matter most. Here's everything
+            you might want to know.
           </p>
         </div>
 

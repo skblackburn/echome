@@ -219,23 +219,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Founder note */}
-      <section className="py-20">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6">
-          <Card className="p-8 paper-surface">
-            <blockquote className="text-muted-foreground leading-relaxed space-y-4">
-              <p>
-                I built Echo Me for my own family. My mother, my husband, and my father died the morning after my wedding. I have her letters — including one she wrote me the night before — and they are everything.
-              </p>
-              <p>
-                I wanted a place where the rest of us could leave that for the people we love, on our own terms. Not a chatbot. Not a memorial page. A place for real words, delivered when they matter most.
-              </p>
-              <footer className="text-foreground font-medium pt-2">— Norah</footer>
-            </blockquote>
-          </Card>
-        </div>
-      </section>
-
       {/* Pricing teaser */}
       <section className="bg-muted/40 py-16">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
