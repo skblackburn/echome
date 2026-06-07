@@ -5,8 +5,6 @@ import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import Home from "@/pages/Home";
-import Landing from "@/pages/Landing";
-import Onboarding from "@/pages/Onboarding";
 import CreatePersona from "@/pages/CreatePersona";
 import PersonaDashboard from "@/pages/PersonaDashboard";
 import MemoryIntake from "@/pages/MemoryIntake";
@@ -18,42 +16,14 @@ import JoinEcho from "@/pages/JoinEcho";
 import Contribute from "@/pages/Contribute";
 import ContributorSettings from "@/pages/ContributorSettings";
 import Milestones from "@/pages/Milestones";
-import CreateMilestone from "@/pages/CreateMilestone";
-import MilestoneDetail from "@/pages/MilestoneDetail";
 import FamilySharing from "@/pages/FamilySharing";
 import Journal from "@/pages/Journal";
-import JournalHome from "@/pages/JournalHome";
-import JournalEditor from "@/pages/JournalEditor";
-import JournalDetail from "@/pages/JournalDetail";
-import DocumentLibrary from "@/pages/DocumentLibrary";
-import QuestionsIntake from "@/pages/QuestionsIntake";
-import UploadGuidance from "@/pages/UploadGuidance";
-import Pricing from "@/pages/Pricing";
-import Account from "@/pages/Account";
-import Reactivate from "@/pages/Reactivate";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
-import Faq from "@/pages/Faq";
-import Privacy from "@/pages/Privacy";
-import ClaimEcho from "@/pages/ClaimEcho";
-import Letters from "@/pages/Letters";
-import LetterNew from "@/pages/LetterNew";
-import LetterDetail from "@/pages/LetterDetail";
-import LetterInbox from "@/pages/LetterInbox";
-import PhotoMemories from "@/pages/PhotoMemories";
-import PhotoMemoryNew from "@/pages/PhotoMemoryNew";
-import PhotoMemoryDetail from "@/pages/PhotoMemoryDetail";
-import Folder from "@/pages/Folder";
-import FolderChooser from "@/pages/FolderChooser";
-import FolderLetterNew from "@/pages/FolderLetterNew";
-import FolderStoryNew from "@/pages/FolderStoryNew";
-import FolderLetterDetail from "@/pages/FolderLetterDetail";
-import FolderStoryDetail from "@/pages/FolderStoryDetail";
-import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
-// Redirect to login if not authenticated, or to reactivate if cancelled
-function ProtectedRoute({ component: Component, allowCancelled }: { component: React.ComponentType<any>; allowCancelled?: boolean }) {
+// Redirect to login if not authenticated
+function ProtectedRoute({ component: Component }: { component: React.ComponentType<any> }) {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
 
@@ -70,35 +40,7 @@ function ProtectedRoute({ component: Component, allowCancelled }: { component: R
     return null;
   }
 
-  // Redirect cancelled users to reactivation page
-  if (user.status === "cancelled" && !allowCancelled) {
-    navigate("/reactivate");
-    return null;
-  }
-
   return <Component />;
-}
-
-// Show Landing for visitors, Home dashboard for authenticated users
-function LandingOrHome() {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-      </div>
-    );
-  }
-
-  if (user) {
-    if (user.status === "cancelled") {
-      return <Reactivate />;
-    }
-    return <Home />;
-  }
-
-  return <Landing />;
 }
 
 function AppRoutes() {
@@ -108,52 +50,22 @@ function AppRoutes() {
         {/* Public routes */}
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
-        <Route path="/pricing" component={Pricing} />
-        <Route path="/faq" component={Faq} />
-        <Route path="/privacy" component={Privacy} />
         <Route path="/join" component={JoinEcho} />
-        <Route path="/heirs/claim/:token" component={ClaimEcho} />
         <Route path="/persona/:id/chat" component={Chat} />
         <Route path="/persona/:id/contribute" component={Contribute} />
         <Route path="/persona/:id/contributor-settings" component={ContributorSettings} />
 
         {/* Protected routes */}
-        <Route path="/">{() => <LandingOrHome />}</Route>
-        <Route path="/onboarding">{() => <ProtectedRoute component={Onboarding} />}</Route>
+        <Route path="/">{() => <ProtectedRoute component={Home} />}</Route>
         <Route path="/create">{() => <ProtectedRoute component={CreatePersona} />}</Route>
-        <Route path="/journal">{() => <ProtectedRoute component={JournalHome} />}</Route>
-        <Route path="/journal/new">{() => <ProtectedRoute component={JournalEditor} />}</Route>
-        <Route path="/journal/:id">{() => <ProtectedRoute component={JournalDetail} />}</Route>
-        <Route path="/journal/:id/edit">{() => <ProtectedRoute component={JournalEditor} />}</Route>
         <Route path="/persona/:id">{() => <ProtectedRoute component={PersonaDashboard} />}</Route>
-        <Route path="/persona/:id/questions">{() => <ProtectedRoute component={QuestionsIntake} />}</Route>
         <Route path="/persona/:id/memories">{() => <ProtectedRoute component={MemoryIntake} />}</Route>
-        <Route path="/persona/:id/upload-guidance">{() => <ProtectedRoute component={UploadGuidance} />}</Route>
         <Route path="/persona/:id/interview">{() => <ProtectedRoute component={Interview} />}</Route>
         <Route path="/persona/:id/life-story">{() => <ProtectedRoute component={LifeStory} />}</Route>
         <Route path="/persona/:id/edit">{() => <ProtectedRoute component={EditPersona} />}</Route>
         <Route path="/persona/:id/milestones">{() => <ProtectedRoute component={Milestones} />}</Route>
-        <Route path="/persona/:id/milestones/new">{() => <ProtectedRoute component={CreateMilestone} />}</Route>
-        <Route path="/persona/:id/milestones/:milestoneId">{() => <ProtectedRoute component={MilestoneDetail} />}</Route>
         <Route path="/persona/:id/family">{() => <ProtectedRoute component={FamilySharing} />}</Route>
         <Route path="/persona/:id/journal">{() => <ProtectedRoute component={Journal} />}</Route>
-        <Route path="/persona/:id/documents">{() => <ProtectedRoute component={DocumentLibrary} />}</Route>
-        <Route path="/photos">{() => <ProtectedRoute component={PhotoMemories} />}</Route>
-        <Route path="/photos/new">{() => <ProtectedRoute component={PhotoMemoryNew} />}</Route>
-        <Route path="/photos/:id">{() => <ProtectedRoute component={PhotoMemoryDetail} />}</Route>
-        <Route path="/letters">{() => <ProtectedRoute component={Letters} />}</Route>
-        <Route path="/letters/new">{() => <ProtectedRoute component={LetterNew} />}</Route>
-        <Route path="/letters/inbox">{() => <ProtectedRoute component={LetterInbox} />}</Route>
-        <Route path="/letters/:id">{() => <ProtectedRoute component={LetterDetail} />}</Route>
-        <Route path="/folders">{() => <ProtectedRoute component={FolderChooser} />}</Route>
-        <Route path="/persona/:id/folder">{() => <ProtectedRoute component={Folder} />}</Route>
-        <Route path="/persona/:id/folder/letter/new">{() => <ProtectedRoute component={FolderLetterNew} />}</Route>
-        <Route path="/persona/:id/folder/story/new">{() => <ProtectedRoute component={FolderStoryNew} />}</Route>
-        <Route path="/persona/:id/folder/letter/:letterId">{() => <ProtectedRoute component={FolderLetterDetail} />}</Route>
-        <Route path="/persona/:id/folder/story/:storyId">{() => <ProtectedRoute component={FolderStoryDetail} />}</Route>
-        <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
-        <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
-        <Route path="/reactivate">{() => <ProtectedRoute component={Reactivate} allowCancelled />}</Route>
 
         <Route component={NotFound} />
       </Switch>

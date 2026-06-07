@@ -1,10 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes, registerStripeWebhook } from "./routes";
+import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initDb } from "./storage";
-import { startLetterDeliveryWorker } from "./letter-worker";
-import { isR2Configured, checkR2Connectivity } from "./storage/r2";
 
 const app = express();
 const httpServer = createServer(app);
@@ -14,9 +12,6 @@ declare module "http" {
     rawBody: unknown;
   }
 }
-
-// Stripe webhook must be registered BEFORE JSON body parser
-registerStripeWebhook(app);
 
 app.use(
   express.json({
@@ -69,21 +64,7 @@ app.use((req, res, next) => {
   // Initialize database tables
   await initDb();
 
-  // Verify R2 storage connectivity at startup
-  if (isR2Configured()) {
-    try {
-      await checkR2Connectivity();
-    } catch (err) {
-      console.error("R2 storage unavailable — new uploads will fall back to local disk");
-    }
-  } else {
-    console.warn("R2 env vars not configured — file uploads will use local disk (ephemeral on Railway!)");
-  }
-
   await registerRoutes(httpServer, app);
-
-  // Start the letter delivery worker
-  startLetterDeliveryWorker();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -101,7 +82,7 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if ((process.env.ENVIRONMENT || process.env.NODE_ENV) === "production") {
+  if (process.env.NODE_ENV === "production") {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");

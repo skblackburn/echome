@@ -5,13 +5,12 @@ interface AuthUser {
   id: number;
   email: string;
   name: string;
-  status?: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -36,7 +35,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const u = await res.json();
     if (u.error) throw new Error(u.error);
     setUser(u);
-    return u;
   };
 
   const register = async (email: string, password: string, name: string) => {

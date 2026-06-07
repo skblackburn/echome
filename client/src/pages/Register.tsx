@@ -6,12 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EchoMeLogo, EchoMeWordmark } from "@/components/EchoMeLogo";
 import { ArrowRight, Check } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
   const [, navigate] = useLocation();
   const { register } = useAuth();
-  const { toast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,8 +25,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(email, password, name);
-      toast({ title: "Welcome!", description: "Check your email for getting started tips." });
-      navigate("/onboarding");
+      navigate("/");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -43,13 +40,9 @@ export default function Register() {
       <div className="w-full max-w-sm space-y-8">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center breathing">
-            <EchoMeLogo size={22} className="text-primary" />
-          </div>
-          <EchoMeWordmark className="h-6 text-foreground" />
-          <h1 className="font-display text-xl font-semibold text-foreground">Start your Folder.</h1>
+          <EchoMeWordmark className="h-8 text-foreground" />
           <p className="text-sm text-muted-foreground text-center">
-            A private place for letters, stories, voice notes, and photos for the people you love.
+            Create an account to start preserving the people you love.
           </p>
         </div>
 
@@ -119,10 +112,7 @@ export default function Register() {
         </form>
 
         <p className="text-xs text-muted-foreground text-center leading-relaxed">
-          AI features are off by default. You can turn them on later in Settings.
-        </p>
-        <p className="text-xs text-muted-foreground/70 text-center leading-relaxed">
-          By creating an account you agree to keep your Folder private and use it with care for the people it represents.
+          By creating an account you agree to keep your Echoes private and use them with care for the people they represent.
         </p>
 
         <div className="text-center text-sm text-muted-foreground">
