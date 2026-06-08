@@ -133,7 +133,7 @@ function StepWho({ selfMode, setSelfMode, onNext }: {
 function StepAboutThem({
   selfMode, name, setName, birthYear, setBirthYear, birthPlace, setBirthPlace,
   pronouns, setPronouns, relationship, setRelationship, bio, setBio,
-  photoPreview, onPhoto, onPhotoDrop, onNext, onBack,
+  photoPreview, onPhoto, onNext, onBack,
 }: {
   selfMode: boolean;
   name: string; setName: (v: string) => void;
@@ -144,12 +144,10 @@ function StepAboutThem({
   bio: string; setBio: (v: string) => void;
   photoPreview: string | null;
   onPhoto: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onPhotoDrop: (file: File) => void;
   onNext: () => void;
   onBack: () => void;
 }) {
   const photoRef = useRef<HTMLInputElement>(null);
-  const [photoDragOver, setPhotoDragOver] = useState(false);
   const canContinue = name.trim() && pronouns && (selfMode || relationship);
 
   return (
@@ -170,11 +168,7 @@ function StepAboutThem({
         <button
           type="button"
           onClick={() => photoRef.current?.click()}
-          onDragOver={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(true); }}
-          onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(true); }}
-          onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(false); }}
-          onDrop={e => { e.preventDefault(); e.stopPropagation(); setPhotoDragOver(false); const file = e.dataTransfer.files[0]; if (file) onPhotoDrop(file); }}
-          className={`flex-shrink-0 w-20 h-20 rounded-full border-2 border-dashed flex items-center justify-center transition-all cursor-pointer overflow-hidden group ${photoDragOver ? "border-primary bg-primary/10" : "border-border bg-muted/50 hover:bg-muted hover:border-primary/40"}`}
+          className="flex-shrink-0 w-20 h-20 rounded-full border-2 border-dashed border-border flex items-center justify-center bg-muted/50 hover:bg-muted hover:border-primary/40 transition-all cursor-pointer overflow-hidden group"
         >
           {photoPreview ? (
             <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
@@ -548,11 +542,6 @@ export default function CreatePersona() {
     }
   };
 
-  const handlePhotoDrop = (file: File) => {
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
-  };
-
   const createMutation = useMutation({
     mutationFn: async () => {
       const form = new FormData();
@@ -600,19 +589,10 @@ export default function CreatePersona() {
           ? `Created with ${selectedMemories.size} imported ${selectedMemories.size === 1 ? "memory" : "memories"}.`
           : "Now let's add their memories and personality.",
       });
-      navigate(`/persona/${persona.id}/questions`);
+      navigate(`/persona/${persona.id}/memories`);
     },
-    onError: (e: Error) => {
-      if (e.message.includes("403") || e.message.includes("ECHO_LIMIT")) {
-        toast({
-          title: "Echo limit reached",
-          description: "You've reached your Echo limit on your current plan. Upgrade to create more.",
-          variant: "destructive",
-        });
-        navigate("/pricing");
-      } else {
-        toast({ title: "Something went wrong", description: String(e), variant: "destructive" });
-      }
+    onError: (e) => {
+      toast({ title: "Something went wrong", description: String(e), variant: "destructive" });
     },
   });
 
@@ -640,7 +620,6 @@ export default function CreatePersona() {
             bio={bio} setBio={setBio}
             photoPreview={photoPreview}
             onPhoto={handlePhoto}
-            onPhotoDrop={handlePhotoDrop}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
           />
