@@ -95,10 +95,10 @@ export default function UploadGuidance() {
   const handleContinue = () => {
     // Mark guidance as seen for this persona
     try {
-      const seen = JSON.parse(localStorage.getItem("echome_guidance_seen") || "[]");
+      const seen: string[] = [];
       if (!seen.includes(personaId)) {
         seen.push(personaId);
-        localStorage.setItem("echome_guidance_seen", JSON.stringify(seen));
+        // guidance tracked in memory only
       }
     } catch (_) {}
     navigate(`/persona/${personaId}/memories`);

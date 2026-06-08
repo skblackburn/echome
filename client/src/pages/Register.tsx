@@ -43,10 +43,7 @@ export default function Register() {
       <div className="w-full max-w-sm space-y-8">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center breathing">
-            <EchoMeLogo size={22} className="text-primary" />
-          </div>
-          <EchoMeWordmark className="h-6 text-foreground" />
+          <EchoMeWordmark className="h-8 text-foreground" />
           <h1 className="font-display text-xl font-semibold text-foreground">Start your Folder.</h1>
           <p className="text-sm text-muted-foreground text-center">
             A private place for letters, stories, voice notes, and photos for the people you love.
