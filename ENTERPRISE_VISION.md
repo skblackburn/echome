@@ -310,3 +310,42 @@ Companies can offer departing employees a passive income stream from their insti
 ---
 
 *This document should be reviewed and updated before development begins. Consult legal counsel before first enterprise client contract.*
+
+---
+
+## Knowledge Continuity Package
+
+*A premium add-on for when key employees leave*
+
+Companies will pay thousands to retain institutional knowledge. Rather than offering a "download of the Echo" (which would transfer the voice and AI persona outside our platform — losing recurring revenue and removing employee protections), we offer a structured export of everything captured.
+
+### What's included in the export
+
+- **Call transcript archive** — every call, searchable, formatted chronologically
+- **Knowledge map** — topics the Echo handled, questions asked, answers given
+- **Communication style guide** — how this person explained things, their vocabulary, their tone, characteristic phrases
+- **Auto-generated FAQ document** — built from the most common call patterns
+- **Onboarding material** — formatted so a replacement or new hire can learn from it immediately
+
+### What is NOT transferable
+
+- **The voice clone** — stays inside Echo Me only. The voice is the employee's biometric identity and cannot be exported or transferred. This protects the employee and ensures continued platform dependency.
+- **The AI persona itself** — the Echo only runs inside Echo Me under license. No raw model exports.
+
+### Pricing
+
+- **Knowledge Continuity Package:** $1,500 - $5,000 one-time fee per departing employee
+- **On-premise/private cloud deployment** (for large enterprises who want the Echo hosted internally): $50,000 - $150,000/year — still requires a license key, still subject to employee consent terms
+
+### How to position it
+
+Don't call it a download. Call it a **Knowledge Continuity Package.**
+
+*"When a key employee leaves, their Echo has captured everything they knew and how they communicated it. This package exports that institutional knowledge into formats your team can use immediately — so their expertise never walks out the door."*
+
+### Build requirement
+
+Add to Phase 3 (Admin Dashboard):
+- [ ] Knowledge export generator (transcripts, FAQ, style guide, knowledge map)
+- [ ] One-time purchase flow for Knowledge Continuity Package
+- [ ] PDF and structured JSON export formats
