@@ -20,8 +20,12 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/");
+      const u = await login(email, password);
+      if (u.status === "cancelled") {
+        navigate("/reactivate");
+      } else {
+        navigate("/");
+      }
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -34,9 +38,12 @@ export default function Login() {
       <div className="w-full max-w-sm space-y-8">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <EchoMeWordmark className="h-8 text-foreground" />
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center breathing">
+            <EchoMeLogo size={22} className="text-primary" />
+          </div>
+          <EchoMeWordmark className="h-6 text-foreground" />
           <p className="text-sm text-muted-foreground text-center">
-            Welcome back. Your memories are here.
+            Welcome back. Your Folder is waiting.
           </p>
         </div>
 

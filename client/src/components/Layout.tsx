@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { EchoMeWordmark } from "./EchoMeLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon, LogOut, User } from "lucide-react";
+import { ArrowLeft, Sun, Moon, LogOut, User, CreditCard, Settings, HelpCircle, Shield, BookOpen, Mail, Camera, FolderOpen } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
@@ -52,6 +52,50 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
           </div>
           <div className="flex items-center gap-1">
             {actions}
+            {user && (
+              <Link href="/folders">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Folders">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+            {user && (
+              <Link href="/photos">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Photo Memories">
+                  <Camera className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+            {user && (
+              <Link href="/letters">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Letters">
+                  <Mail className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+            {user && (
+              <Link href="/journal">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Journal">
+                  <BookOpen className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+            <Link href="/faq">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="FAQ">
+                <HelpCircle className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+            <Link href="/privacy">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="Privacy">
+                <Shield className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               size="icon"
@@ -64,6 +108,18 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
             </Button>
             {user && (
               <div className="flex items-center gap-1">
+                <Link href="/pricing">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    title="Pricing">
+                    <CreditCard className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+                <Link href="/settings">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    title="Settings">
+                    <Settings className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
                 <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-muted-foreground">
                   <User className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline max-w-[100px] truncate">{user.name}</span>
@@ -83,6 +139,21 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
       <main className="flex-1">
         {children}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border py-6 mt-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+          <Link href="/privacy">
+            <span className="hover:text-foreground cursor-pointer transition-colors">Privacy</span>
+          </Link>
+          <Link href="/faq">
+            <span className="hover:text-foreground cursor-pointer transition-colors">FAQ</span>
+          </Link>
+          <a href="mailto:support@echome.family" className="hover:text-foreground transition-colors">
+            Contact: support@echome.family
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

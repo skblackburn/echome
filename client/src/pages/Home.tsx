@@ -6,16 +6,30 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MessageCircle, Heart, BookOpen, Mic, Key } from "lucide-react";
+import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown, Users, GitFork } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
+import { useLocation } from "wouter";
 import type { Persona } from "@shared/schema";
 
-function PersonaCard({ persona }: { persona: Persona }) {
+interface SubscriptionInfo {
+  plan: string;
+  limits: { echoes: number; messages: number | null };
+  totalMessagesSent: number;
+}
+
+function PersonaCard({ persona }: { persona: Persona & { _isInherited?: boolean; _heirAccess?: string; parentPersonaId?: number | null; isShared?: boolean | null } }) {
   const initials = persona.name
     .split(" ")
     .map(n => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const isInherited = (persona as any)._isInherited;
+  const isForked = !!(persona as any).parentPersonaId;
+  const isShared = (persona as any).isShared;
+  const heirAccess = (persona as any)._heirAccess;
 
   return (
     <Link href={`/persona/${persona.id}`}>
@@ -26,7 +40,13 @@ function PersonaCard({ persona }: { persona: Persona }) {
         <div className="flex items-start gap-4">
           {/* Avatar */}
           <div className="flex-shrink-0">
-            {persona.photo ? (
+            {(persona as any).avatarUrl ? (
+              <img
+                src={(persona as any).avatarUrl}
+                alt={persona.name}
+                className="w-14 h-14 rounded-full object-cover ring-2 ring-primary/25"
+              />
+            ) : persona.photo ? (
               <img
                 src={`/uploads/${persona.photo}`}
                 alt={persona.name}
@@ -46,9 +66,31 @@ function PersonaCard({ persona }: { persona: Persona }) {
                 <h3 className="font-display font-semibold text-foreground leading-tight">{persona.name}</h3>
                 <p className="text-sm text-muted-foreground capitalize mt-0.5">{persona.relationship}</p>
               </div>
-              <Badge variant="outline" className="text-xs flex-shrink-0 capitalize border-primary/30 text-primary">
-                {persona.status}
-              </Badge>
+              <div className="flex gap-1.5 flex-shrink-0">
+                {isShared && !isInherited && (
+                  <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 dark:text-purple-400 gap-1">
+                    <Users className="h-3 w-3" />
+                    Shared
+                  </Badge>
+                )}
+                {isInherited && (
+                  <Badge variant="outline" className="text-xs border-rose-300 text-rose-700 dark:text-rose-400 gap-1">
+                    <Heart className="h-3 w-3" />
+                    Inherited
+                  </Badge>
+                )}
+                {isForked && (
+                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:text-blue-400 gap-1">
+                    <GitFork className="h-3 w-3" />
+                    Private copy
+                  </Badge>
+                )}
+                {!isInherited && !isForked && !isShared && (
+                  <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary">
+                    {persona.status}
+                  </Badge>
+                )}
+              </div>
             </div>
             {persona.bio && (
               <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{persona.bio}</p>
@@ -60,12 +102,14 @@ function PersonaCard({ persona }: { persona: Persona }) {
                   Speak with {persona.name.split(" ")[0]}
                 </Button>
               </Link>
-              <Link href={`/persona/${persona.id}/memories`} onClick={e => e.stopPropagation()}>
-                <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground">
-                  <BookOpen className="h-3.5 w-3.5" />
-                  Add memories
-                </Button>
-              </Link>
+              {(!isInherited || heirAccess === "full") && (
+                <Link href={`/persona/${persona.id}/memories`} onClick={e => e.stopPropagation()}>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Add memories
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -75,11 +119,27 @@ function PersonaCard({ persona }: { persona: Persona }) {
 }
 
 export default function Home() {
+  const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
+  const [isDark, setIsDark] = useState(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
+
   const { data: personas, isLoading } = useQuery<Persona[]>({
     queryKey: ["/api/personas"],
   });
 
+  const { data: subscription } = useQuery<SubscriptionInfo>({
+    queryKey: ["/api/subscription"],
+    enabled: !!user,
+  });
+
   const hasPersonas = personas && personas.length > 0;
+  const echoLimit = subscription?.limits?.echoes ?? 1;
+  const atEchoLimit = (personas?.length ?? 0) >= echoLimit;
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,12 +147,47 @@ export default function Home() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <EchoMeWordmark className="text-foreground" />
-          <Link href="/create">
-            <Button size="sm" className="gap-1.5" data-testid="button-create-persona">
-              <Plus className="h-4 w-4" />
-              New Persona
+          <div className="flex items-center gap-1">
+            {!atEchoLimit && (
+              <Link href="/create">
+                <Button size="sm" className="gap-1.5" data-testid="button-create-persona">
+                  <Plus className="h-4 w-4" />
+                  New Persona
+                </Button>
+              </Link>
+            )}
+            <Link href="/pricing">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Pricing">
+                <CreditCard className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Settings">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsDark(d => !d)}
+              className="text-muted-foreground hover:text-foreground h-8 w-8"
+              aria-label="Toggle theme"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-          </Link>
+            {user && (
+              <>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-muted-foreground">
+                  <User className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline max-w-[100px] truncate">{user.name}</span>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={async () => { await logout(); navigate("/login"); }} title="Sign out">
+                  <LogOut className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -104,20 +199,19 @@ export default function Home() {
               <Heart className="h-8 w-8 text-primary" />
             </div>
             <h1 className="font-display text-3xl font-semibold text-foreground mb-3">
-              Preserve a voice that matters
+              Write to the people you love.
             </h1>
             <p className="text-muted-foreground text-base max-w-md mx-auto leading-relaxed mb-8">
-              EchoMe captures someone's personality, stories, and voice — so the people who love them can keep asking
-              <em className="text-foreground"> "What would they say?"</em>
+              Letters, stories, voice notes, and photos for your family — delivered when you choose. Start a Folder for someone, or pick up where you left off.
             </p>
 
             {/* Feature pills */}
             <div className="flex flex-wrap gap-2 justify-center mb-10">
               {[
                 { icon: Mic, label: "Voice & stories" },
-                { icon: Heart, label: "Personality capture" },
-                { icon: MessageCircle, label: "AI conversation" },
-                { icon: BookOpen, label: "Memory archive" },
+                { icon: Heart, label: "Letters & Folders" },
+                { icon: BookOpen, label: "Journal & memories" },
+                { icon: MessageCircle, label: "Optional AI" },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm">
                   <Icon className="h-3.5 w-3.5" />
@@ -129,7 +223,7 @@ export default function Home() {
             <Link href="/create">
               <Button size="lg" className="gap-2" data-testid="button-start-echo">
                 <Plus className="h-4 w-4" />
-                Create your first Echo
+                Start your first Folder
               </Button>
             </Link>
           </div>
@@ -146,23 +240,85 @@ export default function Home() {
 
         {hasPersonas && (
           <div>
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="font-display text-xl font-semibold text-foreground">Your Echoes</h2>
-              <span className="text-sm text-muted-foreground">{personas.length} persona{personas.length !== 1 ? "s" : ""}</span>
-            </div>
-            <div className="space-y-3">
-              {personas.map(p => (
-                <PersonaCard key={p.id} persona={p} />
-              ))}
-            </div>
+            {/* Group personas into sections */}
+            {(() => {
+              const ownEchoes = personas.filter(p => !(p as any)._isInherited && !(p as any).parentPersonaId);
+              const inheritedEchoes = personas.filter(p => (p as any)._isInherited);
+              const forkedEchoes = personas.filter(p => !!(p as any).parentPersonaId && !(p as any)._isInherited);
+              return (
+                <>
+                  {ownEchoes.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-display text-xl font-semibold text-foreground">My Echoes</h2>
+                        <span className="text-sm text-muted-foreground">{ownEchoes.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {ownEchoes.map(p => <PersonaCard key={p.id} persona={p as any} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {inheritedEchoes.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
+                          <Heart className="h-4 w-4 text-rose-400" />
+                          Shared with me
+                        </h2>
+                        <span className="text-sm text-muted-foreground">{inheritedEchoes.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {inheritedEchoes.map(p => <PersonaCard key={p.id} persona={p as any} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {forkedEchoes.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <h2 className="font-display text-lg font-semibold text-foreground flex items-center gap-2">
+                          <GitFork className="h-4 w-4 text-blue-500" />
+                          My private copies
+                        </h2>
+                        <span className="text-sm text-muted-foreground">{forkedEchoes.length}</span>
+                      </div>
+                      <div className="space-y-3">
+                        {forkedEchoes.map(p => <PersonaCard key={p.id} persona={p as any} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {ownEchoes.length === 0 && inheritedEchoes.length === 0 && forkedEchoes.length === 0 && (
+                    <div className="flex items-center justify-between mb-5">
+                      <h2 className="font-display text-xl font-semibold text-foreground">Your Echoes</h2>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="mt-6 pt-6 border-t border-border space-y-2">
-              <Link href="/create">
-                <Button variant="outline" className="gap-2 w-full" data-testid="button-add-another">
-                  <Plus className="h-4 w-4" />
-                  Add another Echo
-                </Button>
-              </Link>
+              {atEchoLimit ? (
+                <div className="p-4 rounded-lg bg-muted/50 text-center space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Crown className="h-4 w-4 text-primary" />
+                    You've reached your Echo limit ({echoLimit}) on the {subscription?.plan || "free"} plan.
+                  </div>
+                  <Link href="/pricing">
+                    <Button size="sm" className="gap-1.5">
+                      Upgrade to create more
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <Link href="/create">
+                  <Button variant="outline" className="gap-2 w-full" data-testid="button-add-another">
+                    <Plus className="h-4 w-4" />
+                    Add another Echo
+                  </Button>
+                </Link>
+              )}
               <Link href="/join">
                 <Button variant="ghost" className="gap-2 w-full text-muted-foreground" data-testid="button-join-echo">
                   <Key className="h-4 w-4" />

@@ -1,22 +1,34 @@
-import { useParams, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useParams, Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   MessageCircle, BookOpen, Mic, Brain, ChevronRight,
-  Gift, Users, ScrollText, Sparkles, Heart, Pencil
+  Gift, Users, ScrollText, Sparkles, Heart, Pencil, FileText,
+  AlertTriangle, Trash2, GitFork, Shield, FolderOpen
 } from "lucide-react";
-// MessageCircle already imported above
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 interface PersonaSummary { persona: Persona; traits: Trait[]; memories: Memory[]; media: Media[]; }
-interface Milestone { id: number; recipientName: string; occasion: string; deliveryDate: string; delivered: boolean; }
+interface Milestone { id: number; recipientName: string; occasion: string; title: string; scheduledDate: string; status: string; }
 
 function StatCard({ icon: Icon, label, count, color }: { icon: React.ElementType; label: string; count: number; color: string; }) {
   return (
@@ -80,6 +92,31 @@ function AnniversaryBanner({ persona }: { persona: Persona }) {
 export default function PersonaDashboard() {
   const { id } = useParams<{ id: string }>();
   const personaId = parseInt(id);
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Delete echo state
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [forking, setForking] = useState(false);
+
+  const handleDeleteEcho = async () => {
+    setDeleting(true);
+    try {
+      await apiRequest("DELETE", `/api/personas/${personaId}`);
+      toast({ title: "Echo deleted", description: "The Echo and all its data have been permanently deleted." });
+      setDeleteStep(0);
+      setDeleteConfirmText("");
+      queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
+      navigate("/");
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to delete Echo.", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const { data, isLoading } = useQuery<PersonaSummary>({
     queryKey: ["/api/personas", personaId, "summary"],
@@ -120,13 +157,33 @@ export default function PersonaDashboard() {
 
   const { persona, traits, memories, media } = data;
   const firstName = persona.name.split(" ")[0];
+  const isInherited = !!(persona as any)._isInherited;
+  const isShared = (persona as any).isShared;
+  const heirAccess = (persona as any)._heirAccess;
+  const isReadOnly = isInherited && heirAccess === "read_only";
+
+  const handleFork = async () => {
+    if (!confirm("This will create your own private version of this Echo. It will start with everything that's here now, but you'll be the only one who sees your future contributions and conversations. You can still access the shared Echo too.")) return;
+    setForking(true);
+    try {
+      const res = await apiRequest("POST", `/api/personas/${personaId}/fork`);
+      const forked = await res.json();
+      toast({ title: "Private copy created", description: `Your copy of ${firstName}'s Echo is ready.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
+      navigate(`/persona/${forked.id}`);
+    } catch (err) {
+      toast({ title: "Couldn't fork", description: String(err), variant: "destructive" });
+    } finally {
+      setForking(false);
+    }
+  };
   const audioCount = media.filter(m => m.type === "audio").length;
   const docCount = memories.filter(m => m.type === "document").length;
   const storyCount = memories.filter(m => m.type !== "document").length;
 
   const today = new Date().toISOString().split("T")[0];
-  const dueMilestones = milestones.filter(m => !m.delivered && m.deliveryDate <= today);
-  const upcomingMilestones = milestones.filter(m => !m.delivered && m.deliveryDate > today);
+  const dueMilestones = milestones.filter(m => m.status === "scheduled" && m.scheduledDate <= today);
+  const upcomingMilestones = milestones.filter(m => m.status === "scheduled" && m.scheduledDate > today);
 
   const traitsByCategory: Record<string, string[]> = {};
   traits.forEach(t => {
@@ -153,6 +210,39 @@ export default function PersonaDashboard() {
     <Layout backTo="/" backLabel="Home" title={persona.name}>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
+        {/* Shared Echo banner */}
+        {isInherited && (
+          <div className="rounded-2xl border border-purple-300/50 bg-purple-50 dark:bg-purple-950/20 p-5 flex items-start gap-4">
+            <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex-shrink-0">
+              <Heart className="h-5 w-5 text-purple-500" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-purple-700 dark:text-purple-400 flex items-center gap-2">
+                Shared family Echo
+                <Badge variant="outline" className="text-xs border-purple-300 text-purple-600 dark:text-purple-400 gap-1">
+                  <Shield className="h-3 w-3" />
+                  {heirAccess === "full" ? "Full access" : "View & chat only"}
+                </Badge>
+              </div>
+              <p className="text-xs text-purple-600/80 dark:text-purple-400/70 mt-0.5">
+                This Echo was shared with you. {isReadOnly ? "You can chat and view memories." : "You can chat, view, and contribute memories."}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs border-purple-300 text-purple-700 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/30"
+                  disabled={forking}
+                  onClick={handleFork}
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  {forking ? "Creating copy..." : "Fork a private copy"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Anniversary banner */}
         <AnniversaryBanner persona={persona} />
 
@@ -178,7 +268,10 @@ export default function PersonaDashboard() {
 
         {/* Hero */}
         <div className="flex items-start gap-5">
-          {persona.photo ? (
+          {(persona as any).avatarUrl ? (
+            <img src={(persona as any).avatarUrl} alt={persona.name}
+              className="w-20 h-20 rounded-full object-cover ring-2 ring-primary/25 flex-shrink-0" />
+          ) : persona.photo ? (
             <img src={`${API_BASE}/uploads/${persona.photo}`} alt={persona.name}
               className="w-20 h-20 rounded-full object-cover ring-2 ring-border flex-shrink-0" />
           ) : (
@@ -189,11 +282,13 @@ export default function PersonaDashboard() {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-0.5 flex-wrap">
               <h1 className="font-display text-xl font-semibold text-foreground">{persona.name}</h1>
-              <Link href={`/persona/${personaId}/edit`}>
-                <button className="p-1 rounded-md text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Edit profile">
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              </Link>
+              {!isInherited && (
+                <Link href={`/persona/${personaId}/edit`}>
+                  <button className="p-1 rounded-md text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Edit profile">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </Link>
+              )}
               <Badge variant="outline" className="capitalize border-primary/30 text-primary text-xs">{persona.relationship}</Badge>
               {persona.pronouns && <Badge variant="outline" className="text-xs text-muted-foreground">{persona.pronouns}</Badge>}
             </div>
@@ -228,90 +323,90 @@ export default function PersonaDashboard() {
           <StatCard icon={ScrollText} label="Documents" count={docCount} color="bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400" />
         </div>
 
-        {/* Primary action */}
-        <Link href={`/persona/${personaId}/chat`}>
-          <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0">
-            <CardContent className="p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
-                <div>
-                  <div className="font-semibold">Speak with {firstName}</div>
-                  <div className="text-sm opacity-75">Have a conversation powered by their memories</div>
+        {/* Primary actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Link href={`/persona/${personaId}/chat`}>
+            <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0 h-full">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
+                  <div>
+                    <div className="font-semibold">Speak with {firstName}</div>
+                    <div className="text-sm opacity-75">Chat powered by their memories</div>
+                  </div>
                 </div>
-              </div>
-              <ChevronRight className="h-5 w-5 opacity-60" />
-            </CardContent>
-          </Card>
-        </Link>
+                <ChevronRight className="h-5 w-5 opacity-60" />
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href={`/persona/${personaId}/folder`}>
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-primary/30 hover:border-primary/60 h-full">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-primary/10"><FolderOpen className="h-5 w-5 text-primary" /></div>
+                  <div>
+                    <div className="font-semibold text-foreground">Open Folder</div>
+                    <div className="text-sm text-muted-foreground">Letters, stories &amp; memories</div>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
 
         {/* Feature grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link href={`/persona/${personaId}/memories`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                <BookOpen className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Add Memories</div>
-                <div className="text-xs text-muted-foreground">Stories, documents, voice &amp; more</div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
-
-          <Link href={`/persona/${personaId}/interview`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                <MessageCircle className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Guided Interview</div>
-                <div className="text-xs text-muted-foreground">15 questions to capture their story</div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
-
-          <Link href={`/persona/${personaId}/life-story`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-amber-400/30 bg-card hover:border-amber-400/50 hover:bg-amber-50/30 dark:hover:bg-amber-950/10 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors flex-shrink-0">
-                <Sparkles className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Life Story</div>
-                <div className="text-xs text-muted-foreground">Sensory details, family, legacy</div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
-
-          <Link href={`/persona/${personaId}/milestones`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors flex-shrink-0">
-                <Gift className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Milestone Messages</div>
-                <div className="text-xs text-muted-foreground">
-                  {upcomingMilestones.length > 0 ? `${upcomingMilestones.length} upcoming` : "Future messages for loved ones"}
+          {/* Add Memories — hidden for read-only heirs */}
+          {!isReadOnly && (
+            <Link href={`/persona/${personaId}/memories`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
+                  <BookOpen className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Add Memories</div>
+                  <div className="text-xs text-muted-foreground">Stories, documents, voice, interview</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
+            </Link>
+          )}
 
-          <Link href={`/persona/${personaId}/family`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          {/* Milestone Messages — owner only */}
+          {!isInherited && (
+            <Link href={`/persona/${personaId}/milestones`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors flex-shrink-0">
+                  <Gift className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Milestone Messages</div>
+                  <div className="text-xs text-muted-foreground">
+                    {upcomingMilestones.length > 0 ? `${upcomingMilestones.length} upcoming` : "Future messages for loved ones"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Family Sharing</div>
-                <div className="text-xs text-muted-foreground">Invite family to connect with {firstName}</div>
+            </Link>
+          )}
+
+          {/* Family Sharing — owner only */}
+          {!isInherited && (
+            <Link href={`/persona/${personaId}/family`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
+                  <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Family Sharing</div>
+                  <div className="text-xs text-muted-foreground">Invite family to connect with {firstName}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
+            </Link>
+          )}
 
           <Link href={`/persona/${personaId}/journal`}>
             <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
@@ -325,6 +420,24 @@ export default function PersonaDashboard() {
               <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             </div>
           </Link>
+
+          {/* Manage Documents — owner only */}
+          {!isInherited && (
+            <Link href={`/persona/${personaId}/documents`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-sky-400/40 hover:bg-sky-50/50 dark:hover:bg-sky-950/10 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-sky-100 dark:group-hover:bg-sky-900/30 transition-colors flex-shrink-0">
+                  <FileText className="h-4 w-4 text-muted-foreground group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Manage Documents</div>
+                  <div className="text-xs text-muted-foreground">
+                    {docCount > 0 ? `${docCount} uploaded document${docCount !== 1 ? "s" : ""}` : "View and edit uploaded writing"}
+                  </div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </div>
+            </Link>
+          )}
         </div>
 
         {/* Traits preview */}
@@ -346,6 +459,95 @@ export default function PersonaDashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* ── Danger Zone — owner only ────────────────────────────────── */}
+        {!isInherited && (<>
+        <div className="mt-6">
+          <div className="border border-destructive/30 rounded-xl bg-destructive/5 p-6">
+            <h2 className="font-display text-lg font-semibold text-destructive mb-1">Danger Zone</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              This action is permanent and cannot be undone.
+            </p>
+            <div className="rounded-lg border border-destructive/30 bg-card p-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-9 w-9 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="h-5 w-5 text-destructive" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-foreground">Delete this Echo</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Permanently delete {persona.name} and all associated data including documents, conversations, writing style profiles, and memories. This cannot be undone.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => setDeleteStep(1)}
+                  >
+                    Delete Echo
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Delete Echo — Step 1: Warning */}
+        <Dialog open={deleteStep === 1} onOpenChange={(open) => { if (!open) setDeleteStep(0); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Delete this Echo?
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete {persona.name}? All uploaded documents, conversations, and writing style data for this Echo will be permanently deleted. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => setDeleteStep(0)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => setDeleteStep(2)}>
+                I understand, continue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Echo — Step 2: Type name to confirm */}
+        <Dialog open={deleteStep === 2} onOpenChange={(open) => { if (!open) { setDeleteStep(0); setDeleteConfirmText(""); } }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-destructive">Confirm permanent deletion</DialogTitle>
+              <DialogDescription>
+                Type <span className="font-mono font-bold text-foreground">{persona.name}</span> below to confirm you want to permanently delete this Echo and all its data.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2">
+              <Input
+                placeholder={`Type "${persona.name}" to confirm`}
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="font-mono"
+                autoFocus
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => { setDeleteStep(0); setDeleteConfirmText(""); }} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={deleteConfirmText !== persona.name || deleting}
+                onClick={handleDeleteEcho}
+              >
+                {deleting ? "Deleting..." : "Delete Echo"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        </>)}
       </div>
     </Layout>
   );

@@ -95,7 +95,7 @@ export default function UploadGuidance() {
   const handleContinue = () => {
     // Mark guidance as seen for this persona
     try {
-      const seen: string[] = [];
+      const seen = ([] as string[]);
       if (!seen.includes(personaId)) {
         seen.push(personaId);
         // guidance tracked in memory only

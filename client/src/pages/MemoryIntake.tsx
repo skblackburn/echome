@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   BookOpen, Brain, Mic, Plus, Trash2,
-  Upload, X, ChevronRight, MessageSquare, FileText
+  Upload, X, ChevronRight, MessageSquare, FileText, HelpCircle
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Persona, Trait, Memory, Media } from "@shared/schema";
@@ -242,20 +242,20 @@ function MemoriesTab({ personaId, firstName }: { personaId: number; firstName: s
               className={`flex flex-col gap-0.5 p-3 rounded-xl border-2 text-left transition-all ${
                 perspective === "first" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
               }`}>
-              <span className="text-xs font-semibold text-foreground">{isSelf ? 'Your own words' : `${firstName}'s own words`}</span>
-              <span className="text-xs text-muted-foreground">{isSelf ? 'Written by you, capturing your direct experience' : `Written by ${firstName}, or capturing their direct experience`}</span>
+              <span className="text-xs font-semibold text-foreground">{firstName}'s own words</span>
+              <span className="text-xs text-muted-foreground">Written by {firstName}, or capturing her direct experience</span>
             </button>
             <button type="button" onClick={() => setPerspective("third")}
               className={`flex flex-col gap-0.5 p-3 rounded-xl border-2 text-left transition-all ${
                 perspective === "third" ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"
               }`}>
-              <span className="text-xs font-semibold text-foreground">{isSelf ? 'Someone else\'s memory of me' : `My memory of ${firstName}`}</span>
-              <span className="text-xs text-muted-foreground">{isSelf ? 'A memory shared by someone who knows you' : `My recollection of something ${firstName} did, said, or experienced`}</span>
+              <span className="text-xs font-semibold text-foreground">My memory of {firstName}</span>
+              <span className="text-xs text-muted-foreground">My recollection of something she did, said, or experienced</span>
             </button>
           </div>
           {perspective === "third" && (
             <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-              The AI will use this as context — it will speak as if it knows this happened, but from {isSelf ? 'your' : `${firstName}'s`} own perspective.
+              The AI will use this as context about {firstName} — it will speak as if it knows this happened, but from her own perspective.
             </p>
           )}
         </div>
@@ -271,14 +271,14 @@ function MemoriesTab({ personaId, firstName }: { personaId: number; firstName: s
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>{isSelf ? 'Period of your life' : `Period of ${firstName}'s life`}</Label>
+            <Label>Period of {firstName}'s life</Label>
             <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 {LIFE_PERIODS.map(l => <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{isSelf ? 'When in your life did this take place?' : `When in ${firstName}'s life did this take place?`}</p>
+            <p className="text-xs text-muted-foreground">When in {firstName}'s life did this take place?</p>
           </div>
         </div>
         <div className="space-y-1.5">
@@ -336,6 +336,7 @@ function VoiceTab({ personaId, firstName }: { personaId: number; firstName: stri
   const audioRef = useRef<HTMLInputElement>(null);
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [audioDragOver, setAudioDragOver] = useState(false);
 
   const { data: mediaList = [] } = useQuery<Media[]>({
     queryKey: ["/api/personas", personaId, "media"],
@@ -376,7 +377,7 @@ function VoiceTab({ personaId, firstName }: { personaId: number; firstName: stri
     <div className="space-y-6">
       <div className="rounded-lg bg-muted/50 border border-border p-4 text-sm text-muted-foreground space-y-1">
         <p className="font-medium text-foreground">Why voice recordings matter</p>
-        <p>ElevenLabs can clone {isSelf ? 'your' : `${firstName}'s`} voice from a real recording, so the Echo speaks in {isSelf ? 'your' : 'their'} actual voice. Even one good 3–5 minute recording makes an enormous difference.</p>
+        <p>ElevenLabs can clone {firstName}'s voice from a real recording, so the Echo speaks in their actual voice. Even one good 3–5 minute recording makes an enormous difference.</p>
         <p className="mt-1 text-xs">Best recordings: naturally spoken, minimal background noise. A voicemail, a video call recording, or someone reading aloud all work well.</p>
       </div>
 
@@ -387,10 +388,14 @@ function VoiceTab({ personaId, firstName }: { personaId: number; firstName: stri
             <Input placeholder="e.g., Voicemail from Christmas 2019" value={description} onChange={e => setDescription(e.target.value)} />
           </div>
           <button type="button" onClick={() => audioRef.current?.click()} disabled={uploading}
-            className="flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50"
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(true); }}
+            onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(true); }}
+            onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(false); }}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); setAudioDragOver(false); const f = e.dataTransfer.files[0]; if (f) uploadAudio(f); }}
+            className={`flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed transition-all cursor-pointer disabled:opacity-50 ${audioDragOver ? "border-primary bg-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/50"}`}
             data-testid="button-upload-audio">
             <Mic className="h-8 w-8 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Upload Voice Recording</span>
+            <span className="text-sm font-medium text-foreground">{audioDragOver ? "Drop recording here" : "Upload Voice Recording"}</span>
             <span className="text-xs text-muted-foreground">MP3, WAV, M4A, M4R up to 50MB · {MAX_RECORDINGS - audioFiles.length} remaining</span>
           </button>
           <input ref={audioRef} type="file" accept="audio/*" className="hidden"
@@ -444,7 +449,9 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [docTitle, setDocTitle] = useState("");
+  const [documentType, setDocumentType] = useState<"voice" | "character">("voice");
   const [uploading, setUploading] = useState(false);
+  const [docDragOver, setDocDragOver] = useState(false);
 
   const { data: memories = [] } = useQuery<Memory[]>({
     queryKey: ["/api/personas", personaId, "memories"],
@@ -465,6 +472,7 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
       const form = new FormData();
       form.append("file", file);
       if (docTitle) form.append("title", docTitle);
+      form.append("documentType", documentType);
       const res = await fetch(`${API_BASE}/api/personas/${personaId}/documents`, { method: "POST", body: form });
       if (!res.ok) {
         const err = await res.json();
@@ -493,13 +501,49 @@ function DocumentsTab({ personaId, firstName }: { personaId: number; firstName: 
       <div className="space-y-3">
         <div className="space-y-1.5">
           <Label>Document title <span className="text-muted-foreground text-xs">(optional)</span></Label>
-          <Input placeholder="e.g., Letters to family, 1987–1992" value={docTitle} onChange={e => setDocTitle(e.target.value)} />
+          <Input placeholder="e.g., Letters to family, 1987-1992" value={docTitle} onChange={e => setDocTitle(e.target.value)} />
         </div>
+
+        {/* Document type toggle */}
+        <div className="space-y-2">
+          <Label>Document type</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDocumentType("voice")}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                documentType === "voice"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="text-sm font-medium text-foreground">Written by {firstName}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Captures their voice and writing style</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDocumentType("character")}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                documentType === "character"
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                  : "border-border hover:border-primary/30"
+              }`}
+            >
+              <div className="text-sm font-medium text-foreground">Written about {firstName}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Letters, cards, or notes from others</div>
+            </button>
+          </div>
+        </div>
+
         <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/40 hover:bg-muted/50 transition-all cursor-pointer disabled:opacity-50"
+          onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(true); }}
+          onDragEnter={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(true); }}
+          onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(false); }}
+          onDrop={e => { e.preventDefault(); e.stopPropagation(); setDocDragOver(false); const f = e.dataTransfer.files[0]; if (f) uploadDoc(f); }}
+          className={`flex flex-col items-center gap-2 w-full p-6 rounded-lg border-2 border-dashed transition-all cursor-pointer disabled:opacity-50 ${docDragOver ? "border-primary bg-primary/10" : "border-border hover:border-primary/40 hover:bg-muted/50"}`}
           data-testid="button-upload-document">
           <FileText className="h-8 w-8 text-muted-foreground" />
-          <span className="text-sm font-medium text-foreground">Upload Document</span>
+          <span className="text-sm font-medium text-foreground">{docDragOver ? "Drop document here" : "Upload Document"}</span>
           <span className="text-xs text-muted-foreground">PDF, DOCX, TXT up to 10MB</span>
         </button>
         <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" className="hidden"
@@ -562,20 +606,30 @@ export default function MemoryIntake() {
   });
 
   const firstName = persona?.name?.split(" ")[0] || "them";
-  const isSelf = (persona as any)?.selfMode === true;
-  const displayName = isSelf ? "your" : `${firstName}'s`;
-  const displayNameCap = isSelf ? "Your" : `${firstName}'s`;
 
   return (
     <Layout backTo={`/persona/${personaId}`} backLabel={persona?.name || "Back"} title="Memory Intake">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         <div className="mb-6">
-          <h1 className="font-display text-xl font-semibold text-foreground mb-1">
-            Build {displayNameCap} Echo
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Add personality traits, memories, and recordings. The more you add, the more authentic the conversations become.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-xl font-semibold text-foreground mb-1">
+                Build {firstName}'s Echo
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Add personality traits, memories, and recordings. The more you add, the more authentic the conversations become.
+              </p>
+            </div>
+            <Link href={`/persona/${personaId}/upload-guidance`}>
+              <button
+                type="button"
+                className="flex-shrink-0 p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Upload tips & guidance"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            </Link>
+          </div>
         </div>
 
         {/* CTA cards */}
@@ -587,7 +641,7 @@ export default function MemoryIntake() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-foreground text-sm">Guided Interview</div>
-                <div className="text-xs text-muted-foreground mt-0.5">15 questions capturing {isSelf ? 'your' : `${firstName}'s`} stories and values</div>
+                <div className="text-xs text-muted-foreground mt-0.5">15 questions capturing {firstName}'s stories and values</div>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
             </div>
@@ -631,7 +685,7 @@ export default function MemoryIntake() {
         <div className="mt-8 pt-6 border-t border-border">
           <Link href={`/persona/${personaId}/chat`}>
             <Button className="w-full gap-2" data-testid="button-start-conversation">
-              Start talking with {isSelf ? 'yourself' : firstName}
+              Start talking with {firstName}
               <ChevronRight className="h-4 w-4" />
             </Button>
           </Link>

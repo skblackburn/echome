@@ -1,8 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes, registerStripeWebhook } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initDb } from "./storage";
+import { startLetterDeliveryWorker } from "./letter-worker";
 
 const app = express();
 const httpServer = createServer(app);
@@ -12,6 +13,9 @@ declare module "http" {
     rawBody: unknown;
   }
 }
+
+// Stripe webhook must be registered BEFORE JSON body parser
+registerStripeWebhook(app);
 
 app.use(
   express.json({
@@ -66,6 +70,9 @@ app.use((req, res, next) => {
 
   await registerRoutes(httpServer, app);
 
+  // Start the letter delivery worker
+  startLetterDeliveryWorker();
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -82,7 +89,7 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
+  if ((process.env.ENVIRONMENT || process.env.NODE_ENV) === "production") {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");

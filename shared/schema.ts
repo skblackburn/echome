@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, serial, date, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,6 +8,13 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  plan: text("plan").notNull().default("free"),
+  planInterval: text("plan_interval"),
+  planExpiresAt: timestamp("plan_expires_at"),
+  totalMessagesSent: integer("total_messages_sent").notNull().default(0),
+  status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -27,13 +34,22 @@ export const personas = pgTable("personas", {
   children: text("children"),
   pronouns: text("pronouns"),
   birthPlace: text("birth_place"),
+  avatarUrl: text("avatar_url"),
   selfMode: boolean("self_mode").default(false),
   creatorName: text("creator_name"),
   creatorRelationship: text("creator_relationship"),
   creatorNote: text("creator_note"),
   deathYear: text("death_year"),
   remembranceDate: text("remembrance_date"),
+  passingDate: text("passing_date"),
+  isLiving: boolean("is_living").default(true),
+  isShared: boolean("is_shared").default(false),
+  originalCreatorId: integer("original_creator_id"),
+  parentPersonaId: integer("parent_persona_id"),
   status: text("status").notNull().default("active"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertPersonaSchema = createInsertSchema(personas).omit({ id: true, createdAt: true });
@@ -46,6 +62,9 @@ export const traits = pgTable("traits", {
   personaId: integer("persona_id").notNull(),
   category: text("category").notNull(),
   content: text("content").notNull(),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertTraitSchema = createInsertSchema(traits).omit({ id: true, createdAt: true });
@@ -61,8 +80,12 @@ export const memories = pgTable("memories", {
   content: text("content").notNull(),
   period: text("period"),
   tags: text("tags"),
+  documentType: text("document_type").default("voice"),
   contributedBy: text("contributed_by"),
   contributorCode: text("contributor_code"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertMemorySchema = createInsertSchema(memories).omit({ id: true, createdAt: true });
@@ -102,6 +125,9 @@ export const lifeStory = pgTable("life_story", {
   wishForFamily: text("wish_for_family"),
   whatToRemember: text("what_to_remember"),
   unfinshedBusiness: text("unfinished_business"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export const insertLifeStorySchema = createInsertSchema(lifeStory).omit({ id: true, updatedAt: true });
@@ -112,16 +138,26 @@ export type LifeStory = typeof lifeStory.$inferSelect;
 export const milestoneMessages = pgTable("milestone_messages", {
   id: serial("id").primaryKey(),
   personaId: integer("persona_id").notNull(),
-  recipientName: text("recipient_name").notNull(),
+  userId: integer("user_id"),
+  title: text("title").notNull(),
   occasion: text("occasion").notNull(),
-  deliveryDate: text("delivery_date").notNull(),
-  messageType: text("message_type").notNull().default("ai"),
-  prewrittenContent: text("prewritten_content"),
-  delivered: boolean("delivered").default(false),
-  deliveredContent: text("delivered_content"),
+  recipientName: text("recipient_name").notNull(),
+  recipientEmail: text("recipient_email"),
+  messagePrompt: text("message_prompt"),
+  generatedMessage: text("generated_message"),
+  scheduledDate: text("scheduled_date").notNull(),
+  scheduledTime: text("scheduled_time").notNull().default("09:00"),
+  timezone: text("timezone").default("America/New_York"),
+  isRecurring: boolean("is_recurring").default(false),
+  status: text("status").notNull().default("scheduled"),
+  deliveredAt: timestamp("delivered_at"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
-export const insertMilestoneSchema = createInsertSchema(milestoneMessages).omit({ id: true, createdAt: true });
+export const insertMilestoneSchema = createInsertSchema(milestoneMessages).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertMilestone = z.infer<typeof insertMilestoneSchema>;
 export type Milestone = typeof milestoneMessages.$inferSelect;
 
@@ -132,8 +168,13 @@ export const familyMembers = pgTable("family_members", {
   name: text("name").notNull(),
   relationship: text("relationship").notNull(),
   accessCode: text("access_code").notNull(),
+  birthYear: integer("birth_year"),
+  note: text("note"),
   filterSettings: text("filter_settings").default("{}"),
   lastActiveAt: timestamp("last_active_at"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertFamilyMemberSchema = createInsertSchema(familyMembers).omit({ id: true, createdAt: true });
@@ -146,8 +187,210 @@ export const chatMessages = pgTable("chat_messages", {
   personaId: integer("persona_id").notNull(),
   role: text("role").notNull(),
   content: text("content").notNull(),
+  heirUserId: integer("heir_user_id"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+// ─── Echo Heirs ──────────────────────────────────────────────────────────────
+export const echoHeirs = pgTable("echo_heirs", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id").notNull(),
+  creatorUserId: integer("creator_user_id").notNull(),
+  heirEmail: text("heir_email").notNull(),
+  heirUserId: integer("heir_user_id"),
+  heirName: text("heir_name"),
+  heirRelationship: text("heir_relationship"),
+  accessLevel: text("access_level").notNull().default("full"),
+  status: text("status").notNull().default("pending"),
+  claimToken: text("claim_token").notNull().unique(),
+  claimedAt: timestamp("claimed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertEchoHeirSchema = createInsertSchema(echoHeirs).omit({ id: true, createdAt: true });
+export type InsertEchoHeir = z.infer<typeof insertEchoHeirSchema>;
+export type EchoHeir = typeof echoHeirs.$inferSelect;
+
+// ─── Echo Transfers ──────────────────────────────────────────────────────────
+export const echoTransfers = pgTable("echo_transfers", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id").notNull(),
+  transferTrigger: text("transfer_trigger").notNull(),
+  scheduledDate: text("scheduled_date"),
+  executedAt: timestamp("executed_at"),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertEchoTransferSchema = createInsertSchema(echoTransfers).omit({ id: true, createdAt: true });
+export type InsertEchoTransfer = z.infer<typeof insertEchoTransferSchema>;
+export type EchoTransfer = typeof echoTransfers.$inferSelect;
+
+// ─── Writing Styles ──────────────────────────────────────────────────────────
+export const writingStyles = pgTable("writing_styles", {
+  id: serial("id").primaryKey(),
+  personaId: integer("persona_id").notNull().unique(),
+  sentenceStructure: text("sentence_structure"),
+  vocabularyLevel: text("vocabulary_level"),
+  punctuationHabits: text("punctuation_habits"),
+  toneAndEmotion: text("tone_and_emotion"),
+  commonPhrases: text("common_phrases"),
+  formality: text("formality"),
+  narrativeStyle: text("narrative_style"),
+  quirks: text("quirks"),
+  overallSummary: text("overall_summary"),
+  analyzedDocumentCount: integer("analyzed_document_count").default(0),
+  lastAnalyzedAt: timestamp("last_analyzed_at"),
+  contributorUserId: integer("contributor_user_id"),
+  contributorRelationship: text("contributor_relationship"),
+  perspectiveType: text("perspective_type").default("self"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertWritingStyleSchema = createInsertSchema(writingStyles).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertWritingStyle = z.infer<typeof insertWritingStyleSchema>;
+export type WritingStyle = typeof writingStyles.$inferSelect;
+
+// ─── Journal Entries ────────────────────────────────────────────────────────
+export const journalEntries = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  title: text("title"),
+  content: text("content").notNull(),
+  entryDate: text("entry_date").notNull(),
+  mood: text("mood"),
+  includedInEcho: boolean("included_in_echo").default(false),
+  echoPersonaId: integer("echo_persona_id"),
+  linkedMemoryId: integer("linked_memory_id"),
+  reflectionCount: integer("reflection_count").notNull().default(0),
+  aiReflections: text("ai_reflections"),
+  audioUrl: text("audio_url"),
+  audioDurationSeconds: integer("audio_duration_seconds"),
+  transcriptionStatus: text("transcription_status").default("none"),
+  entryType: text("entry_type").default("text"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+export type JournalEntry = typeof journalEntries.$inferSelect;
+
+// ─── Future Letters ─────────────────────────────────────────────────────────
+export const futureLetters = pgTable("future_letters", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  recipientType: text("recipient_type").notNull(), // 'self', 'heir', 'custom_email'
+  recipientUserId: integer("recipient_user_id"),
+  recipientHeirId: integer("recipient_heir_id"),
+  recipientName: text("recipient_name"),
+  recipientEmail: text("recipient_email"),
+  deliverAt: timestamp("deliver_at").notNull(),
+  deliveredAt: timestamp("delivered_at"),
+  status: text("status").notNull().default("scheduled"), // 'scheduled', 'delivered', 'cancelled', 'failed'
+  personaId: integer("persona_id"),
+  deliveryRuleType: text("delivery_rule_type").default("date"), // 'date', 'milestone', 'sealed_until_passing', 'browsable_anytime'
+  deliveryMilestone: text("delivery_milestone"), // e.g. 'engagement', 'birth_of_child', 'graduation', 'loss'
+  recurring: boolean("recurring").default(false),
+  isSealed: boolean("is_sealed").default(false),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertFutureLetterSchema = createInsertSchema(futureLetters).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertFutureLetter = z.infer<typeof insertFutureLetterSchema>;
+export type FutureLetter = typeof futureLetters.$inferSelect;
+
+// ─── Letter Resends ────────────────────────────────────────────────────────
+export const letterResends = pgTable("letter_resends", {
+  id: serial("id").primaryKey(),
+  letterId: integer("letter_id").notNull(),
+  resentAt: timestamp("resent_at").notNull().defaultNow(),
+  resentBy: integer("resent_by").notNull(),
+});
+export const insertLetterResendSchema = createInsertSchema(letterResends).omit({ id: true });
+export type InsertLetterResend = z.infer<typeof insertLetterResendSchema>;
+export type LetterResend = typeof letterResends.$inferSelect;
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // 'letter_delivered', etc.
+  title: text("title").notNull(),
+  message: text("message"),
+  referenceId: integer("reference_id"),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
+// ─── Photo Memories ────────────────────────────────────────────────────────
+export const photoMemories = pgTable("photo_memories", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  personaId: integer("persona_id").notNull(),
+  photoUrl: text("photo_url").notNull(),
+  photoThumbnailUrl: text("photo_thumbnail_url"),
+  aiPrompts: jsonb("ai_prompts"), // array of generated questions
+  userResponses: jsonb("user_responses"), // array of {question, answer} pairs
+  status: text("status").notNull().default("draft"),
+  linkedMemoryId: integer("linked_memory_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertPhotoMemorySchema = createInsertSchema(photoMemories).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPhotoMemory = z.infer<typeof insertPhotoMemorySchema>;
+export type PhotoMemory = typeof photoMemories.$inferSelect;
+
+// ─── Stories (The Folder) ───────────────────────────────────────────────────
+export const stories = pgTable("stories", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  personaId: integer("persona_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertStorySchema = createInsertSchema(stories).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertStory = z.infer<typeof insertStorySchema>;
+export type Story = typeof stories.$inferSelect;
+
+// ─── Milestones Observed (The Folder) ───────────────────────────────────────
+export const milestonesObserved = pgTable("milestones_observed", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  personaId: integer("persona_id"),
+  milestoneType: text("milestone_type").notNull(),
+  observedAt: timestamp("observed_at").defaultNow(),
+  note: text("note"),
+});
+export const insertMilestoneObservedSchema = createInsertSchema(milestonesObserved).omit({ id: true, observedAt: true });
+export type InsertMilestoneObserved = z.infer<typeof insertMilestoneObservedSchema>;
+export type MilestoneObserved = typeof milestonesObserved.$inferSelect;
+
+// ─── User Preferences ─────────────────────────────────────────────────────
+export const userPreferences = pgTable("user_preferences", {
+  userId: integer("user_id").primaryKey(),
+  aiChatEnabled: boolean("ai_chat_enabled").notNull().default(false),
+  aiReflectionsEnabled: boolean("ai_reflections_enabled").notNull().default(false),
+  aiPhotoPromptsEnabled: boolean("ai_photo_prompts_enabled").notNull().default(false),
+  aiVoiceTranscriptionEnabled: boolean("ai_voice_transcription_enabled").notNull().default(false),
+  aiWritingStyleEnabled: boolean("ai_writing_style_enabled").notNull().default(false),
+  emailLetterDelivery: boolean("email_letter_delivery").notNull().default(true),
+  emailMilestones: boolean("email_milestones").notNull().default(true),
+  emailMarketing: boolean("email_marketing").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const insertUserPreferencesSchema = createInsertSchema(userPreferences);
+export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
+export type UserPreferences = typeof userPreferences.$inferSelect;
