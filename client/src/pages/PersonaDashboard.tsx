@@ -110,7 +110,7 @@ export default function PersonaDashboard() {
       setDeleteStep(0);
       setDeleteConfirmText("");
       queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       toast({ title: "Error", description: "Failed to delete Echo.", variant: "destructive" });
     } finally {

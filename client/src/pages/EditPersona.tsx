@@ -134,7 +134,7 @@ export default function EditPersona() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
       toast({ title: "Echo deleted" });
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: () => toast({ title: "Couldn't delete", variant: "destructive" }),
   });

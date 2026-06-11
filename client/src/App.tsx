@@ -79,9 +79,10 @@ function ProtectedRoute({ component: Component, allowCancelled }: { component: R
   return <Component />;
 }
 
-// Show Landing for visitors, Home dashboard for authenticated users
-function LandingOrHome() {
+// / is always the public marketing page — redirect logged-in users to /dashboard
+function PublicLanding() {
   const { user, loading } = useAuth();
+  const [, navigate] = useLocation();
 
   if (loading) {
     return (
@@ -93,9 +94,11 @@ function LandingOrHome() {
 
   if (user) {
     if (user.status === "cancelled") {
-      return <Reactivate />;
+      navigate("/reactivate");
+    } else {
+      navigate("/dashboard");
     }
-    return <Home />;
+    return null;
   }
 
   return <Landing />;
@@ -117,8 +120,11 @@ function AppRoutes() {
         <Route path="/persona/:id/contribute" component={Contribute} />
         <Route path="/persona/:id/contributor-settings" component={ContributorSettings} />
 
+        {/* Root: public marketing page, redirects logged-in users to /dashboard */}
+        <Route path="/" component={PublicLanding} />
+
         {/* Protected routes */}
-        <Route path="/">{() => <LandingOrHome />}</Route>
+        <Route path="/dashboard">{() => <ProtectedRoute component={Home} />}</Route>
         <Route path="/onboarding">{() => <ProtectedRoute component={Onboarding} />}</Route>
         <Route path="/create">{() => <ProtectedRoute component={CreatePersona} />}</Route>
         <Route path="/journal">{() => <ProtectedRoute component={JournalHome} />}</Route>

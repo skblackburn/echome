@@ -81,7 +81,7 @@ export default function Reactivate() {
     try {
       await apiRequest("POST", "/api/account/reactivate");
       toast({ title: "Welcome back!", description: "Your account has been reactivated." });
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       toast({ title: "Error", description: "Could not reactivate account.", variant: "destructive" });
     } finally {

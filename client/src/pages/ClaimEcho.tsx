@@ -70,7 +70,7 @@ export default function ClaimEcho() {
     try {
       await apiRequest("POST", `/api/heirs/claim/${token}/decline`);
       toast({ title: "Invitation declined" });
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       toast({ title: "Error", description: String(err), variant: "destructive" });
     } finally {

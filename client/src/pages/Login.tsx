@@ -24,7 +24,7 @@ export default function Login() {
       if (u.status === "cancelled") {
         navigate("/reactivate");
       } else {
-        navigate("/");
+        navigate("/dashboard");
       }
     } catch (err: any) {
       setError(err.message || "Something went wrong");
