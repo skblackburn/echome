@@ -31,6 +31,19 @@ function PersonaCard({ persona }: { persona: Persona & { _isInherited?: boolean;
   const isForked = !!(persona as any).parentPersonaId;
   const isShared = (persona as any).isShared;
 
+  // Echo unlock: fetch folder data to check memory count
+  const { data: folderData } = useQuery<{ letters: any[]; stories: any[]; documents: any[]; photos: any[] }>({
+    queryKey: ["/api/personas", persona.id, "folder"],
+    queryFn: async () => {
+      const res = await fetch(`/api/personas/${persona.id}/folder`);
+      return res.json();
+    },
+  });
+  const totalItems = folderData
+    ? (folderData.letters?.length ?? 0) + (folderData.stories?.length ?? 0) + (folderData.documents?.length ?? 0) + (folderData.photos?.length ?? 0)
+    : 0;
+  const echoUnlocked = totalItems >= 2;
+
   return (
     <Link href={`/persona/${persona.id}`}>
       <Card
@@ -73,9 +86,10 @@ function PersonaCard({ persona }: { persona: Persona & { _isInherited?: boolean;
                 )}
               </div>
             </div>
-            {persona.bio && (
-              <p className="text-sm text-muted-foreground mt-2 leading-relaxed line-clamp-2">{persona.bio}</p>
-            )}
+            {/* Description — use bio if available, otherwise a gentle default */}
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed line-clamp-2">
+              {persona.bio || "A place to preserve memories, stories, and moments."}
+            </p>
             <div className="flex items-center gap-2 mt-3">
               <Link href={`/persona/${persona.id}/folder`} onClick={e => e.stopPropagation()}>
                 <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-full hover:bg-muted">
@@ -83,12 +97,14 @@ function PersonaCard({ persona }: { persona: Persona & { _isInherited?: boolean;
                   Open Folder
                 </button>
               </Link>
-              <Link href={`/persona/${persona.id}/chat`} onClick={e => e.stopPropagation()}>
-                <button className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors px-2.5 py-1.5 rounded-full hover:bg-primary/5">
-                  <MessageCircle className="h-3 w-3" />
-                  Echo
-                </button>
-              </Link>
+              {echoUnlocked && (
+                <Link href={`/persona/${persona.id}/chat`} onClick={e => e.stopPropagation()}>
+                  <button className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors px-2.5 py-1.5 rounded-full hover:bg-primary/5">
+                    <MessageCircle className="h-3 w-3" />
+                    Echo
+                  </button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -126,16 +142,16 @@ function FolderProgress({ persona }: { persona: Persona }) {
   const label = score < 25 ? "Just getting started" : score < 50 ? "Building nicely" : score < 75 ? "Getting rich" : "Full and rich";
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{persona.name}'s Folder</span>
+        <span className="font-medium text-foreground">{persona.name}'s Folder</span>
         <span className={cn("font-medium", score < 25 ? "text-muted-foreground" : score < 75 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
           {score}% · {label}
         </span>
       </div>
-      <div className="w-full bg-muted rounded-full h-1.5">
+      <div className="w-full bg-muted rounded-full h-2.5">
         <div
-          className={cn("h-1.5 rounded-full transition-all", score < 25 ? "bg-muted-foreground/40" : score < 75 ? "bg-amber-500" : "bg-emerald-500")}
+          className={cn("h-2.5 rounded-full transition-all duration-500", score < 25 ? "bg-muted-foreground/40" : score < 75 ? "bg-amber-500" : "bg-emerald-500")}
           style={{ width: `${score}%` }}
         />
       </div>
@@ -171,14 +187,14 @@ function NextStep({ personas }: { personas: Persona[] }) {
   if (memoryCount === 0) {
     step = {
       label: `Write something for ${firstName}'s Folder`,
-      description: "A letter, a story, or a voice note — anything that feels right.",
+      description: "A letter, a story, a photo, or a voice note — whatever feels right.",
       href: `/persona/${firstPersona.id}/folder`,
       icon: Pencil,
     };
   } else if (memoryCount < 2) {
     step = {
       label: `Add one more memory for ${firstName}`,
-      description: "Two memories create a real foundation. Keep going.",
+      description: "A letter, a story, a photo, or a voice note — whatever feels right.",
       href: `/persona/${firstPersona.id}/folder`,
       icon: Heart,
     };
@@ -192,7 +208,7 @@ function NextStep({ personas }: { personas: Persona[] }) {
   } else {
     step = {
       label: `Continue building ${firstName}'s Folder`,
-      description: "More memories make the Echo richer and more personal.",
+      description: "A letter, a story, a photo, or a voice note — whatever feels right.",
       href: `/persona/${firstPersona.id}/folder`,
       icon: BookOpen,
     };
@@ -202,15 +218,15 @@ function NextStep({ personas }: { personas: Persona[] }) {
 
   return (
     <Link href={step.href}>
-      <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:border-primary/40 hover:bg-primary/8 transition-all cursor-pointer group">
-        <div className="p-2.5 rounded-lg bg-primary/15 flex-shrink-0">
-          <Icon className="h-5 w-5 text-primary" />
+      <div className="flex items-center gap-3 p-3.5 rounded-xl border border-primary/20 bg-primary/4 hover:border-primary/35 hover:bg-primary/7 transition-all cursor-pointer group">
+        <div className="p-2 rounded-lg bg-primary/12 flex-shrink-0">
+          <Icon className="h-4 w-4 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-foreground">{step.label}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{step.description}</div>
+          <div className="text-sm font-medium text-foreground">{step.label}</div>
+          <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{step.description}</div>
         </div>
-        <ArrowRight className="h-4 w-4 text-primary/60 group-hover:text-primary transition-colors flex-shrink-0" />
+        <ArrowRight className="h-4 w-4 text-primary/50 group-hover:text-primary/80 transition-colors flex-shrink-0" />
       </div>
     </Link>
   );
@@ -376,9 +392,9 @@ export default function Home() {
 
             {/* Progress bars for each persona */}
             {ownEchoes.length > 0 && (
-              <div className="space-y-3 p-4 rounded-xl bg-muted/30 border border-border">
+              <div className="space-y-3 pt-1 pb-2 px-4 py-4 rounded-xl bg-muted/30 border border-border">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Folder richness</p>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {ownEchoes.map(p => <FolderProgress key={p.id} persona={p as Persona} />)}
                 </div>
               </div>
