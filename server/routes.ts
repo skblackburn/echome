@@ -3397,9 +3397,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const letter = await storage.getFutureLetterById(id);
     if (!letter) return res.status(404).json({ error: "Letter not found" });
     if (letter.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
-    if (letter.status !== "scheduled") return res.status(400).json({ error: "Can only cancel scheduled letters" });
 
-    await storage.updateFutureLetter(id, { status: "cancelled" } as any);
+    // Hard-delete the letter (resend logs first to avoid FK violation)
+    await storage.deleteLetterById(id);
     res.json({ success: true });
   });
 

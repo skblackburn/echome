@@ -604,6 +604,7 @@ export interface IStorage {
   getFutureLetterById(id: number): Promise<FutureLetter | undefined>;
   updateFutureLetter(id: number, data: Partial<InsertFutureLetter>): Promise<FutureLetter | undefined>;
   deleteFutureLetter(id: number): Promise<void>;
+  deleteLetterById(id: number): Promise<void>;
   getDueLetters(): Promise<FutureLetter[]>;
   getLettersInbox(userId: number): Promise<FutureLetter[]>;
   getLettersNeedingReminder(): Promise<FutureLetter[]>;
@@ -980,6 +981,11 @@ export class PgStorage implements IStorage {
     return letter;
   }
   async deleteFutureLetter(id: number): Promise<void> {
+    await db.delete(schema.futureLetters).where(eq(schema.futureLetters.id, id));
+  }
+  async deleteLetterById(id: number): Promise<void> {
+    // Delete resend log first to avoid FK violation, then the letter itself
+    await db.delete(schema.letterResends).where(eq(schema.letterResends.letterId, id));
     await db.delete(schema.futureLetters).where(eq(schema.futureLetters.id, id));
   }
   async getDueLetters(): Promise<FutureLetter[]> {

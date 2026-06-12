@@ -142,19 +142,20 @@ export default function FolderLetterDetail() {
               {letter.content}
             </div>
 
-            {letter.status === "scheduled" && (
-              <div className="flex justify-end gap-3">
+            {/* Edit only while scheduled; delete is always allowed by the author */}
+            <div className="flex justify-end gap-3">
+              {letter.status === "scheduled" && (
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => setEditing(true)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
+                  <Pencil className="h-3.5 w-3.5" />Edit
                 </Button>
-                <Button variant="destructive" size="sm" className="gap-2"
-                  onClick={() => { if (confirm("Delete this letter?")) deleteMutation.mutate(); }}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </Button>
-              </div>
-            )}
+              )}
+              <Button variant="destructive" size="sm" className="gap-2"
+                disabled={deleteMutation.isPending}
+                onClick={() => { if (confirm("Delete this letter?")) deleteMutation.mutate(); }}>
+                <Trash2 className="h-3.5 w-3.5" />
+                {deleteMutation.isPending ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
           </>
         )}
       </div>
