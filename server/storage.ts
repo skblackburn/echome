@@ -1116,6 +1116,7 @@ export class PgStorage implements IStorage {
 
   // ── Persona Data Purge ────────────────────────────────────────────────────
   async deleteAllPersonaData(personaId: number): Promise<void> {
+    // Delete child records before the persona row to avoid FK violations.
     await db.delete(schema.chatMessages).where(eq(schema.chatMessages.personaId, personaId));
     await db.delete(schema.memories).where(eq(schema.memories.personaId, personaId));
     await db.delete(schema.media).where(eq(schema.media.personaId, personaId));
@@ -1129,6 +1130,15 @@ export class PgStorage implements IStorage {
     await db.delete(schema.photoMemories).where(eq(schema.photoMemories.personaId, personaId));
     await db.delete(schema.stories).where(eq(schema.stories.personaId, personaId));
     await db.delete(schema.milestonesObserved).where(eq(schema.milestonesObserved.personaId, personaId));
+    // Delete letters associated with this persona, then their resend logs
+    const letters = await db.select({ id: schema.futureLetters.id })
+      .from(schema.futureLetters)
+      .where(eq(schema.futureLetters.personaId, personaId));
+    for (const letter of letters) {
+      await db.delete(schema.letterResends).where(eq(schema.letterResends.letterId, letter.id));
+    }
+    await db.delete(schema.futureLetters).where(eq(schema.futureLetters.personaId, personaId));
+    // Finally delete the persona itself
     await db.delete(schema.personas).where(eq(schema.personas.id, personaId));
   }
 
