@@ -712,6 +712,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // USER PREFERENCES
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // ── User Profile (name + avatar) ──────────────────────────────────────────
+  app.patch("/api/user/profile", requireAuth, upload.single("avatar"), async (req, res) => {
+    try {
+      const updates: Record<string, any> = {};
+      if (req.body.name && typeof req.body.name === "string" && req.body.name.trim()) {
+        updates.name = req.body.name.trim();
+      }
+      if (req.file) {
+        updates.avatarUrl = `/uploads/${req.file.filename}`;
+      }
+      if (Object.keys(updates).length === 0) return res.status(400).json({ error: "Nothing to update" });
+      const [updated] = await db.update(schema.users).set(updates).where(eq(schema.users.id, req.user!.id)).returning();
+      const { passwordHash: _, ...safe } = updated;
+      res.json(safe);
+    } catch (err) {
+      console.error("Profile update failed:", err);
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
   app.get("/api/user/preferences", requireAuth, async (req, res) => {
     const prefs = await storage.getUserPreferences(req.user!.id);
     res.json(prefs);

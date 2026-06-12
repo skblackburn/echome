@@ -267,7 +267,13 @@ export default function Home() {
               <CreditCard className="h-4 w-4" />
             </Button>
           </Link>
-          {/* Settings only visible after a Folder exists */}
+          {/* Profile — always visible */}
+          <Link href="/profile">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Profile">
+              <User className="h-4 w-4" />
+            </Button>
+          </Link>
+          {/* Settings — only after a Folder exists */}
           {hasPersonas && (
             <Link href="/settings">
               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Settings">

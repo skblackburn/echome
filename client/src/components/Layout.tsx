@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { EchoMeWordmark } from "./EchoMeLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon, LogOut, Settings } from "lucide-react";
+import { ArrowLeft, Sun, Moon, Settings, User } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
@@ -65,6 +65,13 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+            {user && (
+              <Link href="/profile">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Profile">
+                  <User className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
             {user && (
               <Link href="/settings">
                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Settings">

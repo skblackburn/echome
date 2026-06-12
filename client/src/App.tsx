@@ -54,6 +54,7 @@ import FolderStoryNew from "@/pages/FolderStoryNew";
 import FolderLetterDetail from "@/pages/FolderLetterDetail";
 import FolderStoryDetail from "@/pages/FolderStoryDetail";
 import Settings from "@/pages/Settings";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 
 // Redirect to login if not authenticated, or to reactivate if cancelled
@@ -166,6 +167,7 @@ function AppRoutes() {
         <Route path="/persona/:id/folder/letter/:letterId">{() => <ProtectedRoute component={FolderLetterDetail} />}</Route>
         <Route path="/persona/:id/folder/story/:storyId">{() => <ProtectedRoute component={FolderStoryDetail} />}</Route>
         <Route path="/settings">{() => <ProtectedRoute component={Settings} />}</Route>
+        <Route path="/profile">{() => <ProtectedRoute component={Profile} />}</Route>
         <Route path="/account">{() => <ProtectedRoute component={Account} />}</Route>
         <Route path="/reactivate">{() => <ProtectedRoute component={Reactivate} allowCancelled />}</Route>
 
