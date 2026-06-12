@@ -263,11 +263,16 @@ function ToggleRow({
           <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</div>
         </div>
       </div>
-      <Switch
-        checked={checked}
-        onCheckedChange={onToggle}
-        className="flex-shrink-0"
-      />
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className={`text-xs font-medium ${checked ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+          {checked ? 'On' : 'Off'}
+        </span>
+        <Switch
+          checked={checked}
+          onCheckedChange={onToggle}
+          className={`flex-shrink-0 ${checked ? '[&>span]:bg-emerald-500 bg-emerald-100 dark:bg-emerald-900/30' : 'bg-muted'}`}
+        />
+      </div>
     </div>
   );
 }

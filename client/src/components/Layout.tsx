@@ -29,25 +29,25 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             {backTo && (
               <Link href={backTo}>
-                <Button variant="ghost" size="sm" className="gap-1.5 -ml-2 text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4" />
-                  {backLabel || "Back"}
+                <Button variant="ghost" size="sm" className="gap-2 -ml-2 text-muted-foreground hover:text-foreground px-3">
+                  <ArrowLeft className="h-4 w-4 flex-shrink-0" />
+                  <span>{backLabel || "Back"}</span>
                 </Button>
               </Link>
             )}
             {!backTo && (
-              <Link href="/">
+              <Link href="/dashboard">
                 <EchoMeWordmark className="text-foreground cursor-pointer hover:opacity-80 transition-opacity" />
               </Link>
             )}
             {title && (
-              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground hidden sm:inline">·</span>
             )}
             {title && (
-              <span className="text-sm font-medium text-muted-foreground">{title}</span>
+              <span className="text-sm font-medium text-muted-foreground hidden sm:inline truncate max-w-[200px]">{title}</span>
             )}
           </div>
           <div className="flex items-center gap-1">

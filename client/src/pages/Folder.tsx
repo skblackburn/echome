@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Mail, BookOpen, FileText, Camera, Plus, ChevronRight,
-  Lock, CalendarClock, Milestone, Eye
+  Lock, CalendarClock, Milestone as MilestoneIcon, Eye
 } from "lucide-react";
 import type { Persona } from "@shared/schema";
 
@@ -34,7 +34,7 @@ function DeliveryBadge({ item }: { item: any }) {
     return <Badge variant="outline" className="text-xs gap-1"><Lock className="h-3 w-3" />Sealed</Badge>;
   }
   if (item.deliveryRuleType === "milestone") {
-    return <Badge variant="outline" className="text-xs gap-1"><Milestone className="h-3 w-3" />{item.deliveryMilestone}</Badge>;
+    return <Badge variant="outline" className="text-xs gap-1"><MilestoneIcon className="h-3 w-3" />{item.deliveryMilestone}</Badge>;
   }
   if (item.deliveryRuleType === "date" && item.recurring) {
     return <Badge variant="outline" className="text-xs gap-1"><CalendarClock className="h-3 w-3" />Recurring</Badge>;
@@ -151,28 +151,48 @@ export default function Folder() {
               {letters.length} letter{letters.length !== 1 ? "s" : ""} · {stories.length} stor{stories.length !== 1 ? "ies" : "y"} · {documents.length} doc{documents.length !== 1 ? "s" : ""} · {photos.length} photo{photos.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Compose
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <Link href={`/persona/${personaId}/folder/letter/new`}>
-                <DropdownMenuItem className="cursor-pointer gap-2">
-                  <Mail className="h-4 w-4" />
-                  Write a letter
-                </DropdownMenuItem>
-              </Link>
-              <Link href={`/persona/${personaId}/folder/story/new`}>
-                <DropdownMenuItem className="cursor-pointer gap-2">
-                  <BookOpen className="h-4 w-4" />
-                  Add a story
-                </DropdownMenuItem>
-              </Link>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Context-aware Compose button */}
+          {tab === "all" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gap-2"><Plus className="h-4 w-4" />Compose</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <Link href={`/persona/${personaId}/folder/letter/new`}>
+                  <DropdownMenuItem className="cursor-pointer gap-2"><Mail className="h-4 w-4" />Write a letter</DropdownMenuItem>
+                </Link>
+                <Link href={`/persona/${personaId}/folder/story/new`}>
+                  <DropdownMenuItem className="cursor-pointer gap-2"><BookOpen className="h-4 w-4" />Add a story</DropdownMenuItem>
+                </Link>
+                <Link href={`/persona/${personaId}/documents`}>
+                  <DropdownMenuItem className="cursor-pointer gap-2"><FileText className="h-4 w-4" />Upload Document</DropdownMenuItem>
+                </Link>
+                <Link href={`/photos/new?persona=${personaId}`}>
+                  <DropdownMenuItem className="cursor-pointer gap-2"><Camera className="h-4 w-4" />Upload Photo</DropdownMenuItem>
+                </Link>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {tab === "letter" && (
+            <Link href={`/persona/${personaId}/folder/letter/new`}>
+              <Button className="gap-2"><Plus className="h-4 w-4" />Write a Letter</Button>
+            </Link>
+          )}
+          {tab === "story" && (
+            <Link href={`/persona/${personaId}/folder/story/new`}>
+              <Button className="gap-2"><Plus className="h-4 w-4" />Write a Story</Button>
+            </Link>
+          )}
+          {tab === "document" && (
+            <Link href={`/persona/${personaId}/documents`}>
+              <Button className="gap-2"><Plus className="h-4 w-4" />Upload Document</Button>
+            </Link>
+          )}
+          {tab === "photo" && (
+            <Link href={`/photos/new?persona=${personaId}`}>
+              <Button className="gap-2"><Plus className="h-4 w-4" />Upload Photo</Button>
+            </Link>
+          )}
         </div>
 
         {/* Tabs */}
@@ -187,9 +207,15 @@ export default function Folder() {
 
           <TabsContent value={tab} className="mt-4 space-y-2">
             {filteredTimeline.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground space-y-1">
                 <p className="text-sm">Nothing here yet.</p>
-                <p className="text-xs mt-1">Use the Compose button to write a letter or add a story.</p>
+                <p className="text-xs">
+                  {tab === "document" ? "Upload a document to preserve important papers, notes, or files."
+                  : tab === "photo" ? "Upload a photo and let AI help you capture the story behind it."
+                  : tab === "letter" ? "Write a letter — now, on a future date, or sealed until you're gone."
+                  : tab === "story" ? "Add a story — a memory, a moment, something worth keeping."
+                  : "Use the Compose button to add something to this Folder."}
+                </p>
               </div>
             ) : (
               filteredTimeline.map((item: any, i: number) => (

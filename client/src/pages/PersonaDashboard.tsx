@@ -180,6 +180,8 @@ export default function PersonaDashboard() {
   const audioCount = media.filter(m => m.type === "audio").length;
   const docCount = memories.filter(m => m.type === "document").length;
   const storyCount = memories.filter(m => m.type !== "document").length;
+  const totalFolderItems = memories.length; // total memories including docs
+  const echoUnlocked = totalFolderItems >= 2; // Echo visible after 2 memories
 
   const today = new Date().toISOString().split("T")[0];
   const dueMilestones = milestones.filter(m => m.status === "scheduled" && m.scheduledDate <= today);
@@ -325,20 +327,38 @@ export default function PersonaDashboard() {
 
         {/* Primary actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link href={`/persona/${personaId}/chat`}>
-            <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0 h-full">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
-                  <div>
-                    <div className="font-semibold">Speak with {firstName}</div>
-                    <div className="text-sm opacity-75">Chat powered by their memories</div>
+          {/* Speak with — only shown after Echo is unlocked */}
+          {echoUnlocked ? (
+            <Link href={`/persona/${personaId}/chat`}>
+              <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0 h-full">
+                <CardContent className="p-5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
+                    <div>
+                      <div className="font-semibold">Speak with {firstName}</div>
+                      <div className="text-sm opacity-75">AI Echo — optional feature</div>
+                    </div>
                   </div>
-                </div>
-                <ChevronRight className="h-5 w-5 opacity-60" />
-              </CardContent>
-            </Card>
-          </Link>
+                  <ChevronRight className="h-5 w-5 opacity-60" />
+                </CardContent>
+              </Card>
+            </Link>
+          ) : (
+            <Link href={`/persona/${personaId}/memories`}>
+              <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-dashed border-muted-foreground/30 hover:border-primary/40 h-full">
+                <CardContent className="p-5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-md bg-muted"><Sparkles className="h-5 w-5 text-muted-foreground" /></div>
+                    <div>
+                      <div className="font-semibold text-foreground">Create an Echo <span className="text-xs font-normal text-muted-foreground">(optional)</span></div>
+                      <div className="text-sm text-muted-foreground">Add {Math.max(0, 2 - totalFolderItems)} more {2 - totalFolderItems === 1 ? "memory" : "memories"} to unlock</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                </CardContent>
+              </Card>
+            </Link>
+          )}
 
           <Link href={`/persona/${personaId}/folder`}>
             <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-primary/30 hover:border-primary/60 h-full">
@@ -358,16 +378,16 @@ export default function PersonaDashboard() {
 
         {/* Feature grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Add Memories — hidden for read-only heirs */}
+          {/* Add to Folder — links to folder, not Echo intake */}
           {!isReadOnly && (
-            <Link href={`/persona/${personaId}/memories`}>
+            <Link href={`/persona/${personaId}/folder`}>
               <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
                 <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
                   <BookOpen className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Add Memories</div>
-                  <div className="text-xs text-muted-foreground">Stories, documents, voice, interview</div>
+                  <div className="text-sm font-medium text-foreground">Add to Folder</div>
+                  <div className="text-xs text-muted-foreground">Letters, stories, photos, documents</div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
@@ -408,18 +428,20 @@ export default function PersonaDashboard() {
             </Link>
           )}
 
-          <Link href={`/persona/${personaId}/journal`}>
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-              <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                <ScrollText className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          {echoUnlocked && (
+            <Link href={`/persona/${personaId}/journal`}>
+              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
+                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
+                  <ScrollText className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-foreground">Conversation Journal</div>
+                  <div className="text-xs text-muted-foreground">Archive of every conversation</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground">Conversation Journal</div>
-                <div className="text-xs text-muted-foreground">Archive of every conversation</div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Link>
+            </Link>
+          )}
 
           {/* Manage Documents — owner only */}
           {!isInherited && (
@@ -460,37 +482,17 @@ export default function PersonaDashboard() {
           </Card>
         )}
 
-        {/* ── Danger Zone — owner only ────────────────────────────────── */}
-        {!isInherited && (<>
-        <div className="mt-6">
-          <div className="border border-destructive/30 rounded-xl bg-destructive/5 p-6">
-            <h2 className="font-display text-lg font-semibold text-destructive mb-1">Danger Zone</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              This action is permanent and cannot be undone.
-            </p>
-            <div className="rounded-lg border border-destructive/30 bg-card p-5">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-9 w-9 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
-                  <Trash2 className="h-5 w-5 text-destructive" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold text-foreground">Delete this Echo</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Permanently delete {persona.name} and all associated data including documents, conversations, writing style profiles, and memories. This cannot be undone.
-                  </p>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => setDeleteStep(1)}
-                  >
-                    Delete Echo
-                  </Button>
-                </div>
-              </div>
-            </div>
+        {/* ── Settings link (replaces Danger Zone — delete moved to Settings) ── */}
+        {!isInherited && (
+          <div className="pt-2 border-t border-border">
+            <Link href={`/persona/${personaId}/edit`}>
+              <button className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5">
+                <Pencil className="h-3 w-3" />
+                Edit profile · Settings · Delete Echo
+              </button>
+            </Link>
           </div>
-        </div>
+        )}
 
         {/* Delete Echo — Step 1: Warning */}
         <Dialog open={deleteStep === 1} onOpenChange={(open) => { if (!open) setDeleteStep(0); }}>
@@ -547,7 +549,6 @@ export default function PersonaDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        </>)}
       </div>
     </Layout>
   );

@@ -150,14 +150,14 @@ export default function Journal() {
             })}
           </div>
         ) : (
-          <div className="text-center py-16 space-y-3">
+          <div className="text-center py-16 space-y-3 max-w-sm mx-auto">
             <BookOpen className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-            <p className="text-sm text-muted-foreground">No conversations yet.</p>
-            <p className="text-xs text-muted-foreground/70">
+            <p className="text-sm text-muted-foreground text-center">No conversations yet.</p>
+            <p className="text-xs text-muted-foreground/70 text-center">
               Your conversations with {firstName} will be saved here automatically.
             </p>
             <Link href={`/persona/${personaId}/chat`}>
-              <button className="mt-2 text-xs text-primary hover:underline">
+              <button className="mt-2 text-xs text-primary hover:underline block mx-auto">
                 Start a conversation →
               </button>
             </Link>
