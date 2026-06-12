@@ -344,14 +344,14 @@ export default function PersonaDashboard() {
               </Card>
             </Link>
           ) : (
-            <Link href={`/persona/${personaId}/folder`}>
+            <Link href={`/persona/${personaId}/create`}>
               <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-dashed border-muted-foreground/30 hover:border-primary/40 h-full">
                 <CardContent className="p-5 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-md bg-muted"><Sparkles className="h-5 w-5 text-muted-foreground" /></div>
                     <div>
                       <div className="font-semibold text-foreground">Create an Echo <span className="text-xs font-normal text-muted-foreground">(optional)</span></div>
-                      <div className="text-sm text-muted-foreground">Add {Math.max(0, 2 - totalFolderItems)} more {2 - totalFolderItems === 1 ? "memory" : "memories"} to unlock</div>
+                      <div className="text-sm text-muted-foreground">8 steps · takes about 10 minutes</div>
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 text-muted-foreground" />

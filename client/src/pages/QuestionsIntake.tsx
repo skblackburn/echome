@@ -286,7 +286,7 @@ export default function QuestionsIntake() {
 
   const handleContinue = async () => {
     await saveAnswers();
-    navigate(`/persona/${personaId}/upload-guidance`);
+    navigate(`/persona/${personaId}/folder`);
   };
 
   const unsavedCount = Object.entries(answers).filter(
