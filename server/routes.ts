@@ -12,6 +12,8 @@ import bcrypt from "bcryptjs";
 import session from "express-session";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import connectPgSimple from "connect-pg-simple";
+import pg from "pg";
 import MemoryStore from "memorystore";
 import Stripe from "stripe";
 import { storage, db } from "./storage";
@@ -608,13 +610,28 @@ export function registerStripeWebhook(app: Express) {
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
 
   // SESSION & PASSPORT SETUP
-  const MemStore = MemoryStore(session);
+  // Use PostgreSQL session store so sessions survive Railway restarts and are
+  // consistent across deploys. Falls back to MemoryStore if DATABASE_URL is absent.
+  let sessionStore: session.Store;
+  if (process.env.DATABASE_URL) {
+    const PgSession = connectPgSimple(session);
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    sessionStore = new PgSession({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: true, // auto-creates the sessions table
+    });
+  } else {
+    const MemStore = MemoryStore(session);
+    sessionStore = new MemStore({ checkPeriod: 86400000 });
+  }
+
   app.use(session({
     secret: process.env.APP_SESSION_SECRET || process.env.SESSION_SECRET || "echome-secret-2026",
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 },
-    store: new MemStore({ checkPeriod: 86400000 }),
+    store: sessionStore,
   }));
 
   app.use(passport.initialize());
@@ -645,6 +662,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!email || !password || !name) return res.status(400).json({ error: "All fields required" });
     if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
     if (await storage.getUserByEmail(email)) return res.status(409).json({ error: "An account with that email already exists" });
+
+    // Destroy any existing session first so a new account never inherits
+    // a previous user's session (prevents accounts merging on shared devices).
+    await new Promise<void>((resolve) => {
+      if (req.isAuthenticated()) {
+        req.logout(() => req.session.destroy(() => resolve()));
+      } else {
+        resolve();
+      }
+    });
+
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await storage.createUser({ email, passwordHash, name });
     // Send welcome email (fire-and-forget)
