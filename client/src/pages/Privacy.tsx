@@ -73,7 +73,7 @@ const sections = [
 
 export default function Privacy() {
   return (
-    <Layout>
+    <Layout backTo="/" backLabel="Home">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         {/* Header */}
         <div className="text-center mb-10">

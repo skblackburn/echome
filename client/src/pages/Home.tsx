@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown, Users, GitFork, ArrowRight, Pencil, Lock } from "lucide-react";
+import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown, Users, GitFork, ArrowRight, Pencil, Lock, Camera } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -267,11 +267,14 @@ export default function Home() {
               <CreditCard className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/settings">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Settings">
-              <Settings className="h-4 w-4" />
-            </Button>
-          </Link>
+          {/* Settings only visible after a Folder exists */}
+          {hasPersonas && (
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Settings">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
           <Button variant="ghost" size="icon" onClick={() => setIsDark(d => !d)} className="text-muted-foreground hover:text-foreground h-8 w-8" aria-label="Toggle theme">
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
@@ -325,13 +328,13 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* What's inside — gentle, not overwhelming */}
+            {/* What's inside — gentle, folder-first, no Echo */}
             <div className="grid grid-cols-2 gap-3">
               {[
                 { icon: Pencil, label: "Write letters", desc: "Now, or for a future date" },
                 { icon: Mic, label: "Record your voice", desc: "A message that lives on" },
                 { icon: BookOpen, label: "Tell stories", desc: "Moments worth keeping" },
-                { icon: MessageCircle, label: "Optional AI Echo", desc: "Off by default" },
+                { icon: Camera, label: "Add photos", desc: "With the story behind them" },
               ].map(({ icon: Icon, label, desc }) => (
                 <div key={label} className="flex items-start gap-3 p-3.5 rounded-xl bg-muted/40 border border-border">
                   <div className="p-1.5 rounded-lg bg-background flex-shrink-0">
@@ -343,15 +346,6 @@ export default function Home() {
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className="text-center">
-              <Link href="/join">
-                <button className="text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 mx-auto">
-                  <Key className="h-3.5 w-3.5" />
-                  Join with an access code
-                </button>
-              </Link>
             </div>
           </div>
         )}

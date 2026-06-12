@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EchoMeLogo, EchoMeWordmark } from "@/components/EchoMeLogo";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
@@ -28,7 +28,7 @@ export default function Register() {
     try {
       await register(email, password, name);
       toast({ title: "Welcome!", description: "Check your email for getting started tips." });
-      navigate("/onboarding");
+      navigate("/dashboard");
     } catch (err: any) {
       setError(err.message || "Something went wrong");
     } finally {
@@ -40,6 +40,14 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
+      {/* Back to Home */}
+      <div className="absolute top-4 left-4">
+        <Link href="/">
+          <button type="button" className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-4 w-4" />Home
+          </button>
+        </Link>
+      </div>
       <div className="w-full max-w-sm space-y-8">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">

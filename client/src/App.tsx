@@ -11,6 +11,9 @@ import CreatePersona from "@/pages/CreatePersona";
 import PersonaDashboard from "@/pages/PersonaDashboard";
 import MemoryIntake from "@/pages/MemoryIntake";
 import EchoCreate from "@/pages/EchoCreate";
+import AddFirstMemory from "@/pages/AddFirstMemory";
+import AddSecondMemory from "@/pages/AddSecondMemory";
+import EchoIntroduction from "@/pages/EchoIntroduction";
 import Chat from "@/pages/Chat";
 import Interview from "@/pages/Interview";
 import LifeStory from "@/pages/LifeStory";
@@ -136,6 +139,9 @@ function AppRoutes() {
         <Route path="/persona/:id/questions">{() => <ProtectedRoute component={QuestionsIntake} />}</Route>
         <Route path="/persona/:id/memories">{() => <ProtectedRoute component={MemoryIntake} />}</Route>
         <Route path="/persona/:id/create">{() => <ProtectedRoute component={EchoCreate} />}</Route>
+        <Route path="/persona/:id/first-memory">{() => <ProtectedRoute component={AddFirstMemory} />}</Route>
+        <Route path="/persona/:id/second-memory">{() => <ProtectedRoute component={AddSecondMemory} />}</Route>
+        <Route path="/persona/:id/echo-intro">{() => <ProtectedRoute component={EchoIntroduction} />}</Route>
         <Route path="/persona/:id/upload-guidance">{() => <ProtectedRoute component={UploadGuidance} />}</Route>
         <Route path="/persona/:id/interview">{() => <ProtectedRoute component={Interview} />}</Route>
         <Route path="/persona/:id/life-story">{() => <ProtectedRoute component={LifeStory} />}</Route>

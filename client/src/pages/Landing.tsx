@@ -232,12 +232,6 @@ export default function Landing() {
                 Start your Folder — free
               </Button>
             </Link>
-            <Link href="/pricing">
-              <Button variant="outline" size="lg" className="gap-2">
-                See all plans
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
           </div>
         </div>
       </section>
