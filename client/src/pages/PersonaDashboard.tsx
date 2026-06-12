@@ -344,7 +344,7 @@ export default function PersonaDashboard() {
               </Card>
             </Link>
           ) : (
-            <Link href={`/persona/${personaId}/memories`}>
+            <Link href={`/persona/${personaId}/folder`}>
               <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-dashed border-muted-foreground/30 hover:border-primary/40 h-full">
                 <CardContent className="p-5 flex items-center justify-between">
                   <div className="flex items-center gap-3">
