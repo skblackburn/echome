@@ -137,7 +137,7 @@ export default function PersonaDashboard() {
 
   if (isLoading) {
     return (
-      <Layout backTo="/" backLabel="Home">
+      <Layout backTo="/dashboard" backLabel="Home">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-4">
           <Skeleton className="h-24 rounded-xl" /><Skeleton className="h-40 rounded-xl" />
         </div>
@@ -147,7 +147,7 @@ export default function PersonaDashboard() {
 
   if (!data) {
     return (
-      <Layout backTo="/" backLabel="Home">
+      <Layout backTo="/dashboard" backLabel="Home">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
           <p className="text-muted-foreground">Echo not found.</p>
         </div>
@@ -209,7 +209,7 @@ export default function PersonaDashboard() {
   const scoreLabel = score >= 70 ? "Rich & detailed" : score >= 40 ? "Good foundation" : "Just getting started";
 
   return (
-    <Layout backTo="/" backLabel="Home" title={persona.name}>
+    <Layout backTo="/dashboard" backLabel="Home" title={persona.name}>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
         {/* Shared Echo banner */}

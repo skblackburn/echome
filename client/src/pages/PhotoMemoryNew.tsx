@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,11 +20,15 @@ type Step = "select-persona" | "upload" | "loading" | "questions" | "done";
 
 export default function PhotoMemoryNew() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [step, setStep] = useState<Step>("select-persona");
-  const [selectedPersonaId, setSelectedPersonaId] = useState<string>("");
+  // Read ?persona= query param to pre-select persona and set back destination
+  const preselectedPersonaId = new URLSearchParams(search).get("persona") || "";
+
+  const [step, setStep] = useState<Step>(preselectedPersonaId ? "upload" : "select-persona");
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(preselectedPersonaId);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [photoMemory, setPhotoMemory] = useState<PhotoMemory | null>(null);
@@ -126,8 +130,12 @@ export default function PhotoMemoryNew() {
   const persona = personas.find(p => p.id === parseInt(selectedPersonaId));
   const atLimit = limits && limits.limit !== null && limits.remaining === 0;
 
+  // Back destination: return to the folder the user came from, or /dashboard
+  const backTo = preselectedPersonaId ? `/persona/${preselectedPersonaId}/folder` : "/dashboard";
+  const backLabel = preselectedPersonaId ? "Folder" : "Home";
+
   return (
-    <Layout backTo="/photos" backLabel="Photos" title="New Photo Memory">
+    <Layout backTo={backTo} backLabel={backLabel} title="New Photo Memory">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
         {/* Step 1: Select persona */}
@@ -297,10 +305,10 @@ export default function PhotoMemoryNew() {
               </p>
             </div>
             <div className="flex gap-3 justify-center">
-              <Link href="/photos">
-                <Button variant="outline">View All Photos</Button>
+              <Link href={backTo}>
+                <Button variant="outline">Back to Folder</Button>
               </Link>
-              <Link href="/photos/new">
+              <Link href={`/photos/new${preselectedPersonaId ? `?persona=${preselectedPersonaId}` : ""}`}>
                 <Button
                   onClick={() => {
                     setStep("select-persona");

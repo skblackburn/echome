@@ -296,7 +296,7 @@ export default function QuestionsIntake() {
   const answeredCount = Object.values(answers).filter(v => v.trim()).length;
 
   return (
-    <Layout backTo={`/persona/${personaId}`} backLabel={persona?.name || "Back"}>
+    <Layout backTo={`/persona/${personaId}/folder`} backLabel="Folder">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
         <div className="mb-8">

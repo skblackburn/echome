@@ -160,7 +160,7 @@ export default function DocumentLibrary() {
 
   if (isLoading) {
     return (
-      <Layout backTo={`/persona/${personaId}`} backLabel={firstName}>
+      <Layout backTo={`/persona/${personaId}/folder`} backLabel="Folder">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-4">
           <Skeleton className="h-8 w-48 rounded-lg" />
           <Skeleton className="h-32 rounded-xl" />
@@ -171,7 +171,7 @@ export default function DocumentLibrary() {
   }
 
   return (
-    <Layout backTo={`/persona/${personaId}`} backLabel={firstName} title="Documents">
+    <Layout backTo={`/persona/${personaId}/folder`} backLabel="Folder" title="Documents">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">

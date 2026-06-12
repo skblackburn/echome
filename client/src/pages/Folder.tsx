@@ -106,7 +106,7 @@ export default function Folder() {
 
   if (isLoading) {
     return (
-      <Layout backTo={`/persona/${personaId}`} backLabel="Echo">
+      <Layout backTo="/dashboard" backLabel="Home">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-4">
           <Skeleton className="h-16 rounded-xl" />
           <Skeleton className="h-40 rounded-xl" />
@@ -117,7 +117,7 @@ export default function Folder() {
 
   if (!data) {
     return (
-      <Layout backTo={`/persona/${personaId}`} backLabel="Echo">
+      <Layout backTo="/dashboard" backLabel="Home">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
           <p className="text-muted-foreground">Folder not found.</p>
         </div>
@@ -132,7 +132,7 @@ export default function Folder() {
     : timeline.filter(item => item._type === tab);
 
   return (
-    <Layout backTo={`/persona/${personaId}`} backLabel="Echo" title={`${firstName}'s Folder`}>
+    <Layout backTo="/dashboard" backLabel="Home" title={`${firstName}'s Folder`}>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
         {/* Header */}

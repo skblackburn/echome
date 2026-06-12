@@ -54,13 +54,18 @@ export default function PhotoMemoryDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/photo-memories"] });
       queryClient.invalidateQueries({ queryKey: ["/api/photo-memories/limits"] });
-      navigate("/photos");
+      // Navigate back to the folder for this persona
+      const pId = photoMemory?.personaId;
+      navigate(pId ? `/persona/${pId}/folder` : "/dashboard");
     },
   });
 
+  // Back destination — go to the persona's folder, or dashboard if not yet loaded
+  const folderBackTo = photoMemory ? `/persona/${photoMemory.personaId}/folder` : "/dashboard";
+
   if (isLoading) {
     return (
-      <Layout backTo="/photos" backLabel="Photos" title="Photo Memory">
+      <Layout backTo="/dashboard" backLabel="Home" title="Photo Memory">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
           <div className="animate-pulse space-y-4">
             <div className="h-64 bg-muted rounded-lg" />
@@ -73,7 +78,7 @@ export default function PhotoMemoryDetail() {
 
   if (!photoMemory) {
     return (
-      <Layout backTo="/photos" backLabel="Photos" title="Photo Memory">
+      <Layout backTo="/dashboard" backLabel="Home" title="Photo Memory">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12 text-center">
           <p className="text-muted-foreground">Photo memory not found</p>
         </div>
@@ -108,7 +113,7 @@ export default function PhotoMemoryDetail() {
   };
 
   return (
-    <Layout backTo="/photos" backLabel="Photos" title={persona?.name || "Photo Memory"}>
+    <Layout backTo={folderBackTo} backLabel="Folder" title={persona?.name || "Photo Memory"}>
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-4">
         {/* Photo */}
         <div className="rounded-lg overflow-hidden border border-border">

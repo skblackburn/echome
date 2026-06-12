@@ -105,11 +105,11 @@ export default function UploadGuidance() {
   };
 
   const handleSkip = () => {
-    navigate(`/persona/${personaId}`);
+    navigate(`/persona/${personaId}/folder`);
   };
 
   return (
-    <Layout backTo={`/persona/${personaId}`} backLabel="Back">
+    <Layout backTo={`/persona/${personaId}/folder`} backLabel="Folder">
       <div className="max-w-xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
         {/* Header */}
         <div className="mb-8">
