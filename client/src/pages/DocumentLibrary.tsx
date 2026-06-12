@@ -229,25 +229,17 @@ export default function DocumentLibrary() {
 
         {/* Document list or empty state */}
         {documents.length === 0 ? (
-          <Card className="paper-surface">
-            <CardContent className="p-8 text-center">
-              <div className="p-3 rounded-xl bg-muted/50 w-fit mx-auto mb-4">
-                <FileText className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-display text-lg font-semibold text-foreground mb-1">
-                No documents uploaded yet
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
-                Add writing samples to build {firstName}'s voice. Journals, letters, emails, or any personal writing will help.
-              </p>
-              <Link href={`/persona/${personaId}/upload-guidance`}>
-                <Button className="gap-1.5">
-                  <Upload className="h-4 w-4" />
-                  Upload Writing Samples
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <div className="flex flex-col items-center justify-center text-center py-16 space-y-4">
+            <p className="text-sm font-medium text-muted-foreground max-w-xs">
+              No documents yet. Add writing samples to preserve {firstName}'s voice — journals, letters, emails, or any personal writing.
+            </p>
+            <Link href={`/persona/${personaId}/upload-guidance`}>
+              <Button className="gap-2 mt-2">
+                <Upload className="h-4 w-4" />
+                Add Memory
+              </Button>
+            </Link>
+          </div>
         ) : (
           <div className="space-y-3">
             {filteredDocuments.map((doc) => {
