@@ -64,7 +64,7 @@ export default function Register() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="name">Your name</Label>
+            <Label htmlFor="name">Your name <span className="text-xs font-normal text-muted-foreground">(the person signing up, not the person you're preserving)</span></Label>
             <Input
               id="name"
               placeholder="e.g., Emma"

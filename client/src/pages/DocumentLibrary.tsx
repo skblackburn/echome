@@ -158,6 +158,7 @@ function AddDocumentDialog({
 
       toast({ title: "Document added", description: "Writing style analysis will update shortly." });
       onSuccess();
+      // Also invalidate the folder cache so the Docs tab count updates
       handleClose();
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -322,6 +323,7 @@ export default function DocumentLibrary() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "folder"] });
       queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "summary"] });
       setEditingDoc(null);
       toast({ title: "Document updated" });
@@ -341,6 +343,7 @@ export default function DocumentLibrary() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/personas", personaId, "folder"] });
       setDeletingDoc(null);
       toast({ title: "Document deleted" });
     },
