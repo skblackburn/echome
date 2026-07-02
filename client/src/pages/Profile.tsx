@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { User, Mail, Camera, Loader2, Check, Trash2, Sparkles } from "lucide-react";
+import { User, Mail, Camera, Loader2, Check, Trash2, Sparkles, LogOut, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -298,6 +298,32 @@ export default function Profile() {
             </CardContent>
           </Card>
         )}
+
+        {/* Sign out & account switching */}
+        <Card className="paper-surface">
+          <CardContent className="p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <LogOut className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">Account</span>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full gap-2 justify-start"
+              onClick={async () => { await logout(); navigate("/"); }}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full gap-2 justify-start text-muted-foreground"
+              onClick={async () => { await logout(); navigate("/register"); }}
+            >
+              <UserPlus className="h-4 w-4" />
+              Sign in to a different account
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Delete Account — always visible */}
         <Card className="border-destructive/20 paper-surface">

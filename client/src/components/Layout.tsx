@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { EchoMeWordmark } from "./EchoMeLogo";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sun, Moon, Settings, User } from "lucide-react";
+import { ArrowLeft, Sun, Moon, Settings, User, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
@@ -78,6 +78,16 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
                   <Settings className="h-4 w-4" />
                 </Button>
               </Link>
+            )}
+            {user && (
+              <Button
+                variant="ghost" size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="Sign out"
+                onClick={async () => { await logout(); window.location.href = "/#/"; }}
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             )}
           </div>
         </div>
