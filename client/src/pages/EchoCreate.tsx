@@ -255,10 +255,39 @@ function Step2({ persona, isSelf, initial, onComplete, onBack, onSaveLater }: {
         <label className="text-sm font-medium text-foreground">
           {pro(isSelf, "What matters most to you?", "What mattered most to them?")}
         </label>
-        <MultiSelect options={VALUES_OPTIONS} selected={d.values}
+        <MultiSelect options={[...VALUES_OPTIONS, ...d.values.filter(v => !VALUES_OPTIONS.includes(v))]} selected={d.values}
           onToggle={v => set("values")(toggle(d.values, v))} />
-        <Input value={d.valuesOther} onChange={e => set("valuesOther")(e.target.value)}
-          placeholder="+ Add your own" className="text-sm mt-2" />
+        <div className="flex gap-2 mt-2">
+          <Input
+            value={d.valuesOther}
+            onChange={e => set("valuesOther")(e.target.value)}
+            placeholder="Add your own (e.g. Integrity)"
+            className="text-sm flex-1"
+            onKeyDown={e => {
+              if (e.key === "Enter" && d.valuesOther.trim()) {
+                e.preventDefault();
+                const newVal = d.valuesOther.trim();
+                if (!d.values.includes(newVal)) {
+                  set("values")([...d.values, newVal]);
+                }
+                set("valuesOther")("");
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const newVal = d.valuesOther.trim();
+              if (newVal && !d.values.includes(newVal)) {
+                set("values")([...d.values, newVal]);
+              }
+              set("valuesOther")("");
+            }}
+            className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
+          >
+            Add
+          </button>
+        </div>
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground">
@@ -281,10 +310,35 @@ function Step2({ persona, isSelf, initial, onComplete, onBack, onSaveLater }: {
         <label className="text-sm font-medium text-foreground">
           {pro(isSelf, "How do you make decisions?", "How did they make decisions?")}
         </label>
-        <MultiSelect options={DECISION_OPTIONS} selected={d.decisions}
+        <MultiSelect options={[...DECISION_OPTIONS, ...d.decisions.filter(v => !DECISION_OPTIONS.includes(v))]} selected={d.decisions}
           onToggle={v => set("decisions")(toggle(d.decisions, v))} />
-        <Input value={d.decisionsOther} onChange={e => set("decisionsOther")(e.target.value)}
-          placeholder="+ Add your own" className="text-sm mt-2" />
+        <div className="flex gap-2 mt-2">
+          <Input
+            value={d.decisionsOther}
+            onChange={e => set("decisionsOther")(e.target.value)}
+            placeholder="Add your own"
+            className="text-sm flex-1"
+            onKeyDown={e => {
+              if (e.key === "Enter" && d.decisionsOther.trim()) {
+                e.preventDefault();
+                const newVal = d.decisionsOther.trim();
+                if (!d.decisions.includes(newVal)) set("decisions")([...d.decisions, newVal]);
+                set("decisionsOther")("");
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const newVal = d.decisionsOther.trim();
+              if (newVal && !d.decisions.includes(newVal)) set("decisions")([...d.decisions, newVal]);
+              set("decisionsOther")("");
+            }}
+            className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all"
+          >
+            Add
+          </button>
+        </div>
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground">
