@@ -5,15 +5,23 @@
 @tailwind utilities;
 
 :root {
-  /* ── EchoMe Palette: Warm Sage & Terracotta ───────────────────────────────
-     Sage Green primary, Terracotta accent, Warm Cream background.
-     Feels like home, family, calm, and welcoming.
+  /* ── Echo Me: Warm Sage & Terracotta ──────────────────────────────────────
+     A beautiful journal resting on a shelf in a family home.
+     Not an AI startup that happens to store memories.
   ─────────────────────────────────────────────────────────────────────────── */
 
+  /* Brand tokens */
+  --sage:       #6B8F71;
+  --terracotta: #D97B5A;
+  --cream:      #FAF8F4;
+  --gold:       #E8C47D;
+  --charcoal:   #2F3437;
+  --slate:      #5F676E;
+
   /* Surfaces */
-  --background: 40 33% 97%;            /* Warm Cream #FAF8F4 */
-  --foreground: 200 7% 20%;            /* Charcoal #2F3437 */
-  --card: 0 0% 100%;                   /* Soft White #FFFFFF */
+  --background: 40 33% 97%;            /* Warm Cream  #FAF8F4 */
+  --foreground: 200 7% 20%;            /* Charcoal    #2F3437 */
+  --card: 0 0% 100%;                   /* Soft White  #FFFFFF */
   --card-foreground: 200 7% 20%;
   --popover: 0 0% 100%;
   --popover-foreground: 200 7% 20%;
@@ -22,45 +30,45 @@
   --primary: 128 14% 49%;
   --primary-foreground: 0 0% 100%;
 
-  /* Secondary — light sage tint */
-  --secondary: 128 10% 92%;
-  --secondary-foreground: 128 10% 30%;
+  /* Secondary — very soft sage fill (not stark outline) */
+  --secondary: 128 14% 96%;
+  --secondary-foreground: 128 14% 35%;
 
-  /* Muted */
-  --muted: 40 15% 93%;
-  --muted-foreground: 200 5% 48%;
+  /* Muted — warm not cool */
+  --muted: 40 20% 94%;
+  --muted-foreground: 205 8% 43%;      /* Slate #5F676E */
 
   /* Accent — Golden Sand #E8C47D */
   --accent: 39 67% 70%;
   --accent-foreground: 200 7% 20%;
 
-  /* Terracotta — used for emotional moments, highlights */
+  /* Terracotta — sparingly, humanity moments */
   --terracotta: 18 62% 60%;            /* #D97B5A */
+  --terracotta-light: 18 50% 94%;      /* #F4ECE7 — icon backgrounds */
   --terracotta-foreground: 0 0% 100%;
 
   /* States */
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
-  --border: 40 15% 88%;
+  --border: 128 15% 88%;               /* Sage-tinted border */
   --input: 40 15% 88%;
   --ring: 128 14% 49%;
 
-  /* Radius */
-  --radius: 0.75rem;
+  /* Radius — 16px cards per spec */
+  --radius: 1rem;
 
   /* Sidebar */
-  --sidebar-background: 40 20% 95%;
+  --sidebar-background: 40 25% 95%;
   --sidebar-foreground: 200 7% 20%;
   --sidebar-primary: 128 14% 49%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 128 10% 91%;
+  --sidebar-accent: 128 12% 91%;
   --sidebar-accent-foreground: 200 7% 20%;
-  --sidebar-border: 40 15% 88%;
+  --sidebar-border: 128 15% 88%;
   --sidebar-ring: 128 14% 49%;
 }
 
 .dark {
-  /* Dark mode: deep warm charcoal surfaces, sage stays readable */
   --background: 200 10% 9%;
   --foreground: 40 15% 85%;
   --card: 200 8% 12%;
@@ -68,34 +76,28 @@
   --popover: 200 8% 12%;
   --popover-foreground: 40 15% 85%;
 
-  /* Primary — sage lightened for dark */
   --primary: 128 18% 58%;
   --primary-foreground: 200 10% 9%;
 
-  /* Secondary */
   --secondary: 200 8% 18%;
   --secondary-foreground: 40 12% 78%;
 
-  /* Muted */
   --muted: 200 8% 16%;
   --muted-foreground: 40 8% 52%;
 
-  /* Accent — golden sand stays warm */
   --accent: 39 50% 55%;
   --accent-foreground: 200 10% 9%;
 
-  /* Terracotta dark */
   --terracotta: 18 55% 55%;
+  --terracotta-light: 18 30% 18%;
   --terracotta-foreground: 0 0% 100%;
 
-  /* States */
   --destructive: 0 62% 50%;
   --destructive-foreground: 40 15% 85%;
   --border: 200 6% 22%;
   --input: 200 6% 22%;
   --ring: 128 18% 58%;
 
-  /* Sidebar */
   --sidebar-background: 200 8% 11%;
   --sidebar-foreground: 40 12% 78%;
   --sidebar-primary: 128 18% 58%;
@@ -125,46 +127,25 @@ html {
 body {
   min-height: 100dvh;
   line-height: 1.6;
-  font-family: 'Inter', 'Helvetica Neue', sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Helvetica Neue', sans-serif;
   font-size: 1rem;
+  font-weight: 400;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
 
-/* Headings use Plus Jakarta Sans */
-h1, h2, h3, h4 {
-  font-family: 'Plus Jakarta Sans', 'Helvetica Neue', sans-serif;
-  font-weight: 600;
-  text-wrap: balance;
-  line-height: 1.25;
-}
+/* Headings — Plus Jakarta Sans 700/600 */
+h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; text-wrap: balance; line-height: 1.2; }
+h2 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; text-wrap: balance; line-height: 1.25; }
+h3 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; text-wrap: balance; line-height: 1.3; }
+h4 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; text-wrap: balance; line-height: 1.35; }
+h5, h6 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 500; text-wrap: balance; line-height: 1.4; }
 
-h5, h6 {
-  font-family: 'Inter', 'Helvetica Neue', sans-serif;
-  font-weight: 500;
-  text-wrap: balance;
-  line-height: 1.35;
-}
+p, li { text-wrap: pretty; max-width: 68ch; }
 
-p, li {
-  text-wrap: pretty;
-  max-width: 68ch;
-}
-
-img, picture, video, canvas, svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-input, button, textarea, select {
-  font: inherit;
-  color: inherit;
-}
-
-button {
-  cursor: pointer;
-}
+img, picture, video, canvas, svg { display: block; max-width: 100%; height: auto; }
+input, button, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -175,69 +156,70 @@ button {
   }
 }
 
-/* ─── Tailwind base layer ────────────────────────────────────────────────────── */
+/* ─── Tailwind base ──────────────────────────────────────────────────────────── */
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
 }
 
-/* ─── EchoMe custom utilities ────────────────────────────────────────────────── */
-
-/* Soft sage glow for persona cards and key UI surfaces */
-.echo-glow {
-  box-shadow: 0 0 0 1px hsl(var(--border)),
-              0 4px 16px hsl(128 14% 49% / 0.08),
-              0 1px 3px hsl(200 7% 20% / 0.06);
-}
-
-.echo-glow-hover:hover {
-  box-shadow: 0 0 0 1px hsl(128 14% 49% / 0.3),
-              0 8px 32px hsl(128 14% 49% / 0.14),
-              0 2px 6px hsl(200 7% 20% / 0.08);
-  transition: box-shadow 200ms ease;
-}
-
-/* Warm paper texture for memory cards */
+/* ─── Card depth — paper on a wooden table ───────────────────────────────────── */
 .paper-surface {
-  background: linear-gradient(
-    135deg,
-    hsl(0 0% 100%) 0%,
-    hsl(40 25% 98%) 100%
-  );
+  background: #ffffff;
+  border: 1px solid rgba(107, 143, 113, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  border-radius: 16px;
 }
 
 .dark .paper-surface {
-  background: linear-gradient(
-    135deg,
-    hsl(200 8% 13%) 0%,
-    hsl(200 8% 11%) 100%
-  );
+  background: hsl(200 8% 13%);
+  border-color: rgba(107, 143, 113, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 
-/* Soft divider */
+/* ─── Sage glow — trust, safety, home ───────────────────────────────────────── */
+.echo-glow {
+  box-shadow: 0 0 0 1px rgba(107, 143, 113, 0.15),
+              0 4px 16px rgba(107, 143, 113, 0.08),
+              0 1px 3px rgba(47, 52, 55, 0.06);
+}
+
+.echo-glow-hover:hover {
+  box-shadow: 0 0 0 1px rgba(107, 143, 113, 0.35),
+              0 8px 32px rgba(107, 143, 113, 0.16),
+              0 2px 6px rgba(47, 52, 55, 0.08);
+  transition: box-shadow 200ms ease;
+}
+
+/* ─── Terracotta dividers — humanity moments ─────────────────────────────────── */
 .echo-divider {
-  border-top: 1px solid hsl(var(--border));
-  opacity: 0.7;
+  border-top: 1px solid rgba(217, 123, 90, 0.12);
 }
 
-/* Animated fade-in for chat messages */
+/* ─── Icon pill — sage icon on warm terracotta bg ────────────────────────────── */
+.icon-pill {
+  background: #F4ECE7;
+  color: #6B8F71;
+  border-radius: 10px;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dark .icon-pill {
+  background: hsl(18 30% 18%);
+  color: hsl(128 18% 58%);
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────────── */
 @keyframes messageIn {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.message-in {
-  animation: messageIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+.message-in { animation: messageIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
-/* Breathing pulse for "listening" state */
 @keyframes breathe {
   0%, 100% { opacity: 0.6; transform: scale(1); }
   50%       { opacity: 1;   transform: scale(1.04); }
 }
-.breathing {
-  animation: breathe 2.4s ease-in-out infinite;
-}
+.breathing { animation: breathe 2.4s ease-in-out infinite; }

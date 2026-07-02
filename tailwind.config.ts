@@ -9,8 +9,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "Helvetica Neue", "sans-serif"],
+        sans: ["Plus Jakarta Sans", "Helvetica Neue", "sans-serif"],
         display: ["Plus Jakarta Sans", "Helvetica Neue", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
