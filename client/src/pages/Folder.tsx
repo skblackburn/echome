@@ -128,7 +128,7 @@ export default function Folder() {
 
   if (isLoading) {
     return (
-      <Layout backTo="/dashboard" backLabel="Home">
+      <Layout backTo={`/persona/${personaId}`} backLabel="Back">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-4">
           <Skeleton className="h-16 rounded-xl" />
           <Skeleton className="h-40 rounded-xl" />
@@ -139,7 +139,7 @@ export default function Folder() {
 
   if (!data) {
     return (
-      <Layout backTo="/dashboard" backLabel="Home">
+      <Layout backTo={`/persona/${personaId}`} backLabel="Back">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 text-center">
           <p className="text-muted-foreground">Folder not found.</p>
         </div>
@@ -210,7 +210,7 @@ export default function Folder() {
   };
 
   return (
-    <Layout backTo="/dashboard" backLabel="Home" title={`${firstName}'s Folder`}>
+    <Layout backTo={`/persona/${personaId}`} backLabel={firstName} title={`${firstName}'s Folder`}>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
 
         {/* Folder header row */}

@@ -325,9 +325,28 @@ export default function PersonaDashboard() {
           <StatCard icon={ScrollText} label="Documents" count={docCount} color="bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400" />
         </div>
 
-        {/* Primary actions */}
+        {/* PRIMARY — Two clear actions, no duplicates */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Speak with — only shown after Echo is unlocked */}
+
+          {/* Folder — the main destination */}
+          <Link href={`/persona/${personaId}/folder`}>
+            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-primary/30 hover:border-primary/60 h-full">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-md bg-primary/10"><FolderOpen className="h-5 w-5 text-primary" /></div>
+                  <div>
+                    <div className="font-semibold text-foreground">{firstName}'s Folder</div>
+                    <div className="text-sm text-muted-foreground">
+                      {storyCount + docCount} item{(storyCount + docCount) !== 1 ? "s" : ""} · letters, stories, photos
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Echo — speak or create/resume */}
           {echoUnlocked ? (
             <Link href={`/persona/${personaId}/chat`}>
               <Card className="echo-glow echo-glow-hover cursor-pointer transition-all hover:-translate-y-0.5 bg-primary text-primary-foreground border-0 h-full">
@@ -336,7 +355,7 @@ export default function PersonaDashboard() {
                     <div className="p-2 rounded-md bg-white/15"><MessageCircle className="h-5 w-5" /></div>
                     <div>
                       <div className="font-semibold">Speak with {firstName}</div>
-                      <div className="text-sm opacity-75">AI Echo — optional feature</div>
+                      <div className="text-sm opacity-75">AI Echo conversation</div>
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 opacity-60" />
@@ -357,7 +376,7 @@ export default function PersonaDashboard() {
                       <div className="text-sm text-muted-foreground">
                         {traits && traits.length > 0
                           ? `${traits.length} answer${traits.length === 1 ? "" : "s"} saved · pick up where you left off`
-                          : "8 steps · takes about 10 minutes"}
+                          : "Guided intake · takes about 10 minutes"}
                       </div>
                     </div>
                   </div>
@@ -366,107 +385,58 @@ export default function PersonaDashboard() {
               </Card>
             </Link>
           )}
-
-          <Link href={`/persona/${personaId}/folder`}>
-            <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-primary/30 hover:border-primary/60 h-full">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-md bg-primary/10"><FolderOpen className="h-5 w-5 text-primary" /></div>
-                  <div>
-                    <div className="font-semibold text-foreground">Open Folder</div>
-                    <div className="text-sm text-muted-foreground">Letters, stories &amp; memories</div>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </Link>
         </div>
 
-        {/* Feature grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Add to Folder — links to folder, not Echo intake */}
-          {!isReadOnly && (
-            <Link href={`/persona/${personaId}/folder`}>
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                  <BookOpen className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Add to Folder</div>
-                  <div className="text-xs text-muted-foreground">Letters, stories, photos, documents</div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </Link>
-          )}
+        {/* SECONDARY — Supporting features, clearly labelled */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">More</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 
-          {/* Milestone Messages — owner only */}
-          {!isInherited && (
-            <Link href={`/persona/${personaId}/milestones`}>
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-all cursor-pointer group paper-surface">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-amber-100 dark:group-hover:bg-amber-900/30 transition-colors flex-shrink-0">
-                  <Gift className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Milestone Messages</div>
-                  <div className="text-xs text-muted-foreground">
-                    {upcomingMilestones.length > 0 ? `${upcomingMilestones.length} upcoming` : "Future messages for loved ones"}
+            {/* Milestone Messages */}
+            {!isInherited && (
+              <Link href={`/persona/${personaId}/milestones`}>
+                <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-all cursor-pointer group">
+                  <Gift className="h-4 w-4 text-muted-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">Milestone Messages</div>
+                    <div className="text-xs text-muted-foreground">
+                      {upcomingMilestones.length > 0 ? `${upcomingMilestones.length} upcoming` : "Future messages"}
+                    </div>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </Link>
-          )}
+              </Link>
+            )}
 
-          {/* Family Sharing — owner only */}
-          {!isInherited && (
-            <Link href={`/persona/${personaId}/family`}>
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                  <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Family Sharing</div>
-                  <div className="text-xs text-muted-foreground">Invite family to connect with {firstName}</div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </Link>
-          )}
-
-          {echoUnlocked && (
-            <Link href={`/persona/${personaId}/journal`}>
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group paper-surface">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-                  <ScrollText className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Conversation Journal</div>
-                  <div className="text-xs text-muted-foreground">Archive of every conversation</div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </Link>
-          )}
-
-          {/* Manage Documents — owner only */}
-          {!isInherited && (
-            <Link href={`/persona/${personaId}/documents`}>
-              <div className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card hover:border-sky-400/40 hover:bg-sky-50/50 dark:hover:bg-sky-950/10 transition-all cursor-pointer group paper-surface">
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-sky-100 dark:group-hover:bg-sky-900/30 transition-colors flex-shrink-0">
-                  <FileText className="h-4 w-4 text-muted-foreground group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground">Manage Documents</div>
-                  <div className="text-xs text-muted-foreground">
-                    {docCount > 0 ? `${docCount} uploaded document${docCount !== 1 ? "s" : ""}` : "View and edit uploaded writing"}
+            {/* Family Sharing */}
+            {!isInherited && (
+              <Link href={`/persona/${personaId}/family`}>
+                <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group">
+                  <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">Family Sharing</div>
+                    <div className="text-xs text-muted-foreground">Invite family</div>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </div>
-            </Link>
-          )}
+              </Link>
+            )}
+
+            {/* Conversation Journal — only after Echo unlocked */}
+            {echoUnlocked && (
+              <Link href={`/persona/${personaId}/journal`}>
+                <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition-all cursor-pointer group">
+                  <ScrollText className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground">Conversation Journal</div>
+                    <div className="text-xs text-muted-foreground">Past Echo conversations</div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                </div>
+              </Link>
+            )}
+
+          </div>
         </div>
 
         {/* Traits preview */}
