@@ -88,7 +88,7 @@ export default function Landing() {
           <Button
             variant="outline"
             size="lg"
-            className="gap-2 text-base px-8"
+            className="gap-2 text-base px-8 btn-secondary"
             onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
           >
             See how it works

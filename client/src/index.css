@@ -162,18 +162,18 @@ button { cursor: pointer; }
   body { @apply bg-background text-foreground; }
 }
 
-/* ─── Card depth — paper on a wooden table ───────────────────────────────────── */
+/* ─── Card depth — handmade paper on a wooden table ─────────────────────────── */
 .paper-surface {
   background: #ffffff;
   border: 1px solid rgba(107, 143, 113, 0.15);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.025);
   border-radius: 16px;
 }
 
 .dark .paper-surface {
   background: hsl(200 8% 13%);
   border-color: rgba(107, 143, 113, 0.12);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 /* ─── Sage glow — trust, safety, home ───────────────────────────────────────── */
@@ -192,7 +192,42 @@ button { cursor: pointer; }
 
 /* ─── Terracotta dividers — humanity moments ─────────────────────────────────── */
 .echo-divider {
-  border-top: 1px solid rgba(217, 123, 90, 0.12);
+  border-top: 1px solid rgba(217, 123, 90, 0.15);
+}
+
+/* ─── Secondary button — soft sage, not stark outline ───────────────────────── */
+.btn-secondary {
+  background: rgba(107, 143, 113, 0.04);
+  border: 1px solid rgba(107, 143, 113, 0.20);
+  color: #6B8F71;
+  transition: background 200ms ease, border-color 200ms ease;
+}
+.btn-secondary:hover {
+  background: rgba(107, 143, 113, 0.09);
+  border-color: rgba(107, 143, 113, 0.35);
+}
+
+/* ─── Footer text — slightly stronger than muted ────────────────────────────── */
+footer a, footer span, footer p {
+  color: #6F7477;
+}
+footer a:hover, footer span:hover {
+  color: #2F3437;
+}
+
+/* ─── Terracotta hover — sparingly, only for emotional moments ───────────────── */
+.hover-terracotta:hover {
+  color: #D97B5A;
+  transition: color 200ms ease;
+}
+
+.terracotta-bg-soft {
+  background: rgba(217, 123, 90, 0.08);
+}
+
+.active-terracotta {
+  color: #D97B5A;
+  border-left: 2px solid rgba(217, 123, 90, 0.4);
 }
 
 /* ─── Icon pill — sage icon on warm terracotta bg ────────────────────────────── */

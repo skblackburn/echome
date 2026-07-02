@@ -501,7 +501,10 @@ export default function Faq() {
                       ?.scrollIntoView({ behavior: "smooth" });
                     history.replaceState(null, "", `#/faq?s=${section.id}`);
                   }}
-                  className="text-sm text-primary hover:underline"
+                  className="text-sm transition-colors duration-200"
+                  style={{ color: '#5F676E' }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#6B8F71')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#5F676E')}
                 >
                   {section.title}
                 </a>
