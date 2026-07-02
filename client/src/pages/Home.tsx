@@ -291,11 +291,6 @@ export default function Home() {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
         <EchoMeWordmark className="h-5 text-foreground" />
         <div className="flex items-center gap-1">
-          <Link href="/pricing">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Pricing">
-              <CreditCard className="h-4 w-4" />
-            </Button>
-          </Link>
           {/* Profile — always visible */}
           <Link href="/profile">
             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" title="Profile">

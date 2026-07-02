@@ -99,17 +99,29 @@ export function Layout({ children, backTo, backLabel, title, actions }: LayoutPr
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border py-6 mt-auto">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
-          <Link href="/privacy">
-            <span className="hover:text-foreground cursor-pointer transition-colors">Privacy</span>
-          </Link>
-          <Link href="/faq">
-            <span className="hover:text-foreground cursor-pointer transition-colors">FAQ</span>
-          </Link>
-          <a href="mailto:support@echome.family" className="hover:text-foreground transition-colors">
-            support@echome.family
-          </a>
+      <footer className="border-t border-border py-6 mt-16">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 space-y-3">
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+            <Link href="/pricing">
+              <span className="hover:text-foreground cursor-pointer transition-colors">Pricing</span>
+            </Link>
+            <Link href="/faq">
+              <span className="hover:text-foreground cursor-pointer transition-colors">FAQ</span>
+            </Link>
+            <Link href="/privacy">
+              <span className="hover:text-foreground cursor-pointer transition-colors">Privacy</span>
+            </Link>
+            <a href="mailto:support@echome.family" className="hover:text-foreground transition-colors">
+              Contact
+            </a>
+            {/* Marketing home — useful for sharing or reviewing the public page */}
+            <Link href="/">
+              <span className="hover:text-foreground cursor-pointer transition-colors">About Echo Me</span>
+            </Link>
+          </div>
+          <p className="text-center text-xs text-muted-foreground/50">
+            Echo Me — Family Legacy
+          </p>
         </div>
       </footer>
     </div>
