@@ -170,52 +170,74 @@ function FolderProgress({ persona }: { persona: Persona }) {
 function NextStep({ personas }: { personas: Persona[] }) {
   const firstPersona = personas[0];
 
-  const { data: memories } = useQuery({
-    queryKey: ["/api/personas", firstPersona?.id, "memories"],
+  const { data: folderData } = useQuery({
+    queryKey: ["/api/personas", firstPersona?.id, "folder"],
     enabled: !!firstPersona,
     queryFn: async () => {
-      const res = await fetch(`/api/personas/${firstPersona.id}/memories`);
+      const res = await fetch(`/api/personas/${firstPersona.id}/folder`);
+      return res.json();
+    },
+  });
+
+  const { data: summaryData } = useQuery({
+    queryKey: ["/api/personas", firstPersona?.id, "summary"],
+    enabled: !!firstPersona,
+    queryFn: async () => {
+      const res = await fetch(`/api/personas/${firstPersona.id}/summary`);
       return res.json();
     },
   });
 
   if (!firstPersona) return null;
 
-  const memoryCount = Array.isArray(memories) ? memories.length : 0;
+  const letters = folderData?.letters?.length ?? 0;
+  const stories = folderData?.stories?.length ?? 0;
+  const docs = folderData?.documents?.length ?? 0;
+  const photos = folderData?.photos?.length ?? 0;
+  const totalMemories = letters + stories + docs + photos;
+  const traits = summaryData?.traits ?? [];
+  const hasTraits = traits.length > 0;
   const firstName = firstPersona.name.split(" ")[0];
+  const isSelf = firstPersona.relationship === "myself";
 
-  let step = {
-    label: "",
-    description: "",
-    href: "",
-    icon: Plus,
-  };
+  let step = { label: "", description: "", href: "", icon: Plus };
 
-  if (memoryCount === 0) {
+  if (totalMemories === 0) {
     step = {
-      label: `Write something for ${firstName}'s Folder`,
-      description: "A letter, a story, a photo, or a voice note — whatever feels right.",
-      href: `/persona/${firstPersona.id}/folder`,
+      label: `Add your first memory for ${firstName}`,
+      description: "A letter, a story, a photo — anything feels right as a starting point.",
+      href: `/persona/${firstPersona.id}/first-memory`,
       icon: Pencil,
     };
-  } else if (memoryCount < 2) {
+  } else if (totalMemories === 1) {
     step = {
       label: `Add one more memory for ${firstName}`,
-      description: "A letter, a story, a photo, or a voice note — whatever feels right.",
-      href: `/persona/${firstPersona.id}/folder`,
+      description: "Two memories unlocks the next step. You're almost there.",
+      href: `/persona/${firstPersona.id}/second-memory`,
       icon: Heart,
+    };
+  } else if (!hasTraits) {
+    step = {
+      label: isSelf
+        ? "Answer the guided questions about yourself"
+        : `Answer the guided questions about ${firstName}`,
+      description: isSelf
+        ? "These questions shape your Echo — personality, values, life story."
+        : `These questions shape ${firstName}'s Echo — personality, values, and life story.`,
+      href: `/persona/${firstPersona.id}/create`,
+      icon: MessageCircle,
     };
   } else if (!firstPersona.bio) {
     step = {
-      label: `Tell us a little about ${firstName}`,
-      description: "A few words about who they are — this shapes everything.",
+      label: `Add a short description for ${firstName}`,
+      description: "A sentence or two that captures who they are.",
       href: `/persona/${firstPersona.id}/edit`,
       icon: Pencil,
     };
   } else {
     step = {
-      label: `Continue building ${firstName}'s Folder`,
-      description: "A letter, a story, a photo, or a voice note — whatever feels right.",
+      label: `Keep adding to ${firstName}'s Folder`,
+      description: "Every memory makes the Echo richer — letters, stories, photos, voice.",
       href: `/persona/${firstPersona.id}/folder`,
       icon: BookOpen,
     };
