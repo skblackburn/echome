@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown, Users, GitFork, ArrowRight, Pencil, Lock, Camera } from "lucide-react";
+import { Plus, MessageCircle, Heart, BookOpen, Mic, Key, CreditCard, Settings, Sun, Moon, LogOut, User, Crown, Users, GitFork, ArrowRight, Pencil, Lock, Camera, Sparkles } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -97,11 +97,18 @@ function PersonaCard({ persona }: { persona: Persona & { _isInherited?: boolean;
                   Open Folder
                 </button>
               </Link>
-              {echoUnlocked && (
+              {echoUnlocked ? (
                 <Link href={`/persona/${persona.id}/chat`} onClick={e => e.stopPropagation()}>
                   <button className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors px-2.5 py-1.5 rounded-full hover:bg-primary/5">
                     <MessageCircle className="h-3 w-3" />
                     Echo
+                  </button>
+                </Link>
+              ) : (
+                <Link href={`/persona/${persona.id}/create`} onClick={e => e.stopPropagation()}>
+                  <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-full hover:bg-muted">
+                    <Sparkles className="h-3 w-3" />
+                    {totalItems > 0 ? "Resume Echo" : "Create Echo"}
                   </button>
                 </Link>
               )}

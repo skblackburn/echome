@@ -345,16 +345,23 @@ export default function PersonaDashboard() {
             </Link>
           ) : (
             <Link href={`/persona/${personaId}/create`}>
-              <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-dashed border-muted-foreground/30 hover:border-primary/40 h-full">
+              <Card className="cursor-pointer transition-all hover:-translate-y-0.5 border-2 border-dashed border-primary/40 hover:border-primary/70 h-full">
                 <CardContent className="p-5 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-md bg-muted"><Sparkles className="h-5 w-5 text-muted-foreground" /></div>
+                    <div className="p-2 rounded-md bg-primary/10"><Sparkles className="h-5 w-5 text-primary" /></div>
                     <div>
-                      <div className="font-semibold text-foreground">Create an Echo <span className="text-xs font-normal text-muted-foreground">(optional)</span></div>
-                      <div className="text-sm text-muted-foreground">8 steps · takes about 10 minutes</div>
+                      <div className="font-semibold text-foreground">
+                        {traits && traits.length > 0 ? "Resume Echo Creation" : "Create an Echo"}
+                        {" "}<span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {traits && traits.length > 0
+                          ? `${traits.length} answer${traits.length === 1 ? "" : "s"} saved · pick up where you left off`
+                          : "8 steps · takes about 10 minutes"}
+                      </div>
                     </div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <ChevronRight className="h-5 w-5 text-primary/60" />
                 </CardContent>
               </Card>
             </Link>
