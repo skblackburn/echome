@@ -1155,6 +1155,14 @@ export class PgStorage implements IStorage {
   }
 
   async deleteAllUserData(userId: number): Promise<void> {
+    // Delete letterResends first (FK child of futureLetters)
+    const userLetters = await db.select({ id: schema.futureLetters.id })
+      .from(schema.futureLetters)
+      .where(eq(schema.futureLetters.userId, userId));
+    for (const letter of userLetters) {
+      await db.delete(schema.letterResends).where(eq(schema.letterResends.letterId, letter.id));
+    }
+
     // Delete future letters, notifications, photo memories, stories, milestones observed
     await db.delete(schema.futureLetters).where(eq(schema.futureLetters.userId, userId));
     await db.delete(schema.notifications).where(eq(schema.notifications.userId, userId));

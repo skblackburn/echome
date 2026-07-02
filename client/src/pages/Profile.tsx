@@ -101,8 +101,11 @@ export default function Profile() {
   // Delete account mutation
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${API_BASE}/api/account/delete`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Failed to delete account");
+      const res = await fetch(`${API_BASE}/api/account/delete`, { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Server error ${res.status}`);
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -110,8 +113,8 @@ export default function Profile() {
       logout();
       navigate("/");
     },
-    onError: () => {
-      toast({ title: "Failed to delete account", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete account", description: err.message, variant: "destructive" });
     },
   });
 
