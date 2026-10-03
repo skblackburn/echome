@@ -14,6 +14,9 @@ import {
   Moon,
   Mail,
   ChevronDown,
+  Mic,
+  BookOpen,
+  FolderOpen,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -32,12 +35,12 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <EchoMeWordmark className="text-foreground" />
           <div className="flex items-center gap-2">
-            <Link href="/pricing">
+            <Link href="/pricing" className="hidden sm:block">
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm">
                 Pricing
               </Button>
             </Link>
-            <Link href="/faq">
+            <Link href="/faq" className="hidden sm:block">
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm">
                 FAQ
               </Button>
@@ -67,77 +70,150 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-3xl mx-auto px-4 sm:px-6 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-8">
-          <Heart className="h-8 w-8 text-primary" />
-        </div>
-        <h1 className="font-display text-4xl sm:text-5xl font-semibold text-foreground mb-5 leading-tight">
-          Write to the people you love.<br />
-          <span className="text-primary">Across any distance — including time.</span>
-        </h1>
-        <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed mb-10">
-          Letters, stories, voice notes, and photos for your family. Delivered when you choose: now, on a future date, on a milestone, or sealed until you're gone. AI is optional and off by default.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link href="/register">
-            <Button size="lg" className="gap-2 text-base px-8">
-              <PenLine className="h-4 w-4" />
-              Start your Folder
+      <section className="max-w-5xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-10 grid grid-cols-1 lg:grid-cols-[1.08fr_1fr] gap-12 lg:gap-12 items-center">
+        <div className="text-center lg:text-left">
+          <h1 className="font-display text-4xl sm:text-5xl font-bold text-foreground mb-5 leading-[1.12]">
+            Every life holds <span className="text-primary">stories worth keeping.</span>
+          </h1>
+          <p className="text-muted-foreground text-lg max-w-xl mx-auto lg:mx-0 leading-relaxed mb-8">
+            Echo Me makes it easier to capture the memories, wisdom, laughter, and voice of someone you love, in letters, stories, photos, and voice notes that stay together and stay private.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
+            <Link href="/register">
+              <Button size="lg" className="gap-2 text-base px-8" data-testid="button-hero-start">
+                <PenLine className="h-4 w-4" />
+                Start your Folder
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              size="lg"
+              className="gap-2 text-base px-8 btn-secondary"
+              onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
+              data-testid="button-hero-how"
+            >
+              See how it works
+              <ChevronDown className="h-4 w-4" />
             </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="lg"
-            className="gap-2 text-base px-8 btn-secondary"
-            onClick={() => document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" })}
-          >
-            See how it works
-            <ChevronDown className="h-4 w-4" />
-          </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mt-6 flex items-center justify-center lg:justify-start gap-2">
+            <Lock className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+            Private by design. Built for families, one meaningful conversation at a time.
+          </p>
+        </div>
+
+        {/* Story artifacts: a still composition that the motion reel will later replace */}
+        <figure className="relative mx-auto w-full max-w-md" aria-label="Sample Folder entries: a letter, a voice note, and a story">
+          <div className="relative h-[500px] sm:h-[520px]">
+            <div className="absolute inset-x-3 inset-y-0 rounded-[2rem] bg-primary/10" aria-hidden="true" />
+
+            {/* Letter */}
+            <div className="absolute left-0 top-6 w-[80%] -rotate-3 rounded-2xl bg-card border border-border p-5 shadow-[0_8px_24px_rgba(0,0,0,0.04)]" aria-hidden="true">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-3">
+                <Mail className="h-3.5 w-3.5 text-primary" />
+                Letter · for Maya&apos;s 18th birthday
+              </div>
+              <p className="text-sm text-foreground leading-relaxed">
+                Dear Maya, the summer you were born, the whole street smelled of cut grass and your grandmother&apos;s bread. I want you to know how loud the house was with happiness&hellip;
+              </p>
+              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs bg-[rgba(217,123,90,0.10)] text-[#B5603F] dark:text-[#E8A58C]">
+                <Clock className="h-3 w-3" />
+                Arrives on her birthday
+              </div>
+            </div>
+
+            {/* Voice note */}
+            <div className="absolute right-0 top-[236px] w-[80%] rotate-2 rounded-2xl bg-card border border-border p-5 shadow-[0_8px_24px_rgba(0,0,0,0.05)]" aria-hidden="true">
+              <div className="flex items-center gap-3">
+                <div className="icon-pill"><Mic className="h-4 w-4" /></div>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-foreground truncate">Grandpa&apos;s recipe, told his way</div>
+                  <div className="text-xs text-muted-foreground">Voice note · 0:42</div>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-[3px] h-9">
+                {[8,14,22,12,28,18,10,24,30,16,9,20,26,14,8,18,12,6,10,7,5,9,6,4].map((h, i) => (
+                  <span
+                    key={i}
+                    className={"w-[3px] rounded-full " + (i < 13 ? "bg-primary" : "bg-primary/25")}
+                    style={{ height: h }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Story */}
+            <div className="absolute left-4 bottom-5 w-[72%] -rotate-1 rounded-2xl bg-card border border-border p-4 shadow-[0_8px_24px_rgba(0,0,0,0.04)]" aria-hidden="true">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-1.5">
+                <BookOpen className="h-3.5 w-3.5 text-primary" />
+                Story
+              </div>
+              <div className="text-sm font-semibold text-foreground">The year we moved to the coast</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Written in her own words</div>
+            </div>
+          </div>
+          <figcaption className="text-xs text-muted-foreground text-center mt-4">
+            Illustrative samples. Your Folder holds your own words.
+          </figcaption>
+        </figure>
+      </section>
+
+      {/* Reassurance */}
+      <section className="px-4 sm:px-6 pb-16">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="mx-auto mb-5 h-px w-12 bg-[rgba(217,123,90,0.45)]" aria-hidden="true" />
+          <p className="font-display text-xl sm:text-2xl font-semibold text-foreground leading-snug">
+            You do not need to know every question to ask.
+          </p>
+          <p className="text-muted-foreground mt-2">Echo Me helps you begin.</p>
         </div>
       </section>
 
       {/* How it works */}
-      <section id="how-it-works" className="bg-muted/40 py-20">
+      <section id="how-it-works" className="bg-muted/40 py-20 scroll-mt-14">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
-          <h2 className="font-display text-2xl font-semibold text-foreground text-center mb-12">
-            How it works
+          <h2 className="font-display text-2xl font-semibold text-foreground text-center mb-3">
+            How Echo Me works
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="p-6 text-center paper-surface">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
-                <PenLine className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-display font-semibold text-foreground mb-2">
-                Write what matters.
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Letters, stories, voice notes, photos — for each person you love. Start with one letter. You can always add more.
-              </p>
-            </Card>
-            <Card className="p-6 text-center paper-surface">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
-                <Clock className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-display font-semibold text-foreground mb-2">
-                Choose when it arrives.
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Anytime, a future date, a milestone — graduation, wedding, 18th birthday — or sealed until you're gone. You decide.
-              </p>
-            </Card>
-            <Card className="p-6 text-center paper-surface">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
-                <Sparkles className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="font-display font-semibold text-foreground mb-2">
-                Add AI if you want it — later.
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Optional, off by default. You can turn it on in Settings if and when it feels right. Or leave it off forever.
-              </p>
-            </Card>
-          </div>
+          <p className="text-muted-foreground text-center max-w-xl mx-auto mb-12">
+            Three gentle steps. Start with one memory and add more whenever you like.
+          </p>
+          <ol className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                n: "1",
+                icon: FolderOpen,
+                title: "Start a Folder",
+                body: "Create a Folder for someone you love, or for yourself. It is a private place where everything you add stays together.",
+              },
+              {
+                n: "2",
+                icon: PenLine,
+                title: "Add what feels right",
+                body: "Write a letter, tell a story, add a photo, or record a voice note. Not sure where to begin? Guided questions help you start.",
+              },
+              {
+                n: "3",
+                icon: Clock,
+                title: "Keep it close, or share it",
+                body: "Choose when each letter arrives: now, on a future date, at a milestone, or sealed until you are gone. Share only when you decide to.",
+              },
+            ].map(({ n, icon: Icon, title, body }) => (
+              <li key={n}>
+                <Card className="p-6 h-full paper-surface">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="icon-pill"><Icon className="h-5 w-5" /></div>
+                    <span className="font-display text-sm font-semibold text-[#B5603F] dark:text-[#E8A58C]">Step {n}</span>
+                  </div>
+                  <h3 className="font-display font-semibold text-foreground mb-2">{title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+                </Card>
+              </li>
+            ))}
+          </ol>
+          <p className="text-sm text-muted-foreground text-center max-w-xl mx-auto mt-10 leading-relaxed">
+            Gentle, optional prompts can help you go beyond &ldquo;Tell me about your childhood.&rdquo; AI is off by default, and you can leave it off forever.
+          </p>
         </div>
       </section>
 
