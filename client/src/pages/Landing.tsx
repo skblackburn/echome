@@ -32,9 +32,9 @@ export default function Landing() {
     <div className="min-h-screen bg-background">
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between">
           <EchoMeWordmark className="text-foreground" />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Link href="/pricing" className="hidden sm:block">
               <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm">
                 Pricing
@@ -55,14 +55,14 @@ export default function Landing() {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             <Link href="/login">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-3">
                 Sign in
               </Button>
             </Link>
             <Link href="/register">
               <Button size="sm" className="gap-1.5">
-                Start your Folder
-                <ArrowRight className="h-3.5 w-3.5" />
+                Start<span className="hidden min-[400px]:inline">&nbsp;your Folder</span>
+                <ArrowRight className="h-3.5 w-3.5 hidden sm:block" />
               </Button>
             </Link>
           </div>
@@ -317,7 +317,7 @@ export default function Landing() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <EchoMeWordmark className="text-muted-foreground" />
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
               <Link href="/pricing">
                 <span className="hover:text-foreground cursor-pointer transition-colors">Pricing</span>
               </Link>

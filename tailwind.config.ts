@@ -8,6 +8,17 @@ export default {
   ],
   theme: {
     extend: {
+      // Larger, more readable type scale (previous: xs 12px, sm 14px, base 16px).
+      fontSize: {
+        xs: ["0.875rem", { lineHeight: "1.35rem" }],     // 14px
+        sm: ["1rem", { lineHeight: "1.5rem" }],          // 16px
+        base: ["1.0625rem", { lineHeight: "1.7rem" }],   // 17px
+        lg: ["1.1875rem", { lineHeight: "1.75rem" }],    // 19px
+        xl: ["1.375rem", { lineHeight: "1.9rem" }],      // 22px
+        "2xl": ["1.625rem", { lineHeight: "2.1rem" }],   // 26px
+        "3xl": ["2rem", { lineHeight: "2.4rem" }],       // 32px
+        "4xl": ["2.375rem", { lineHeight: "1.15" }],     // 38px
+      },
       fontFamily: {
         sans: ["Plus Jakarta Sans", "Helvetica Neue", "sans-serif"],
         display: ["Plus Jakarta Sans", "Helvetica Neue", "sans-serif"],

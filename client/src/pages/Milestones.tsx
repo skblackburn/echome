@@ -197,7 +197,7 @@ export default function Milestones() {
                         {m.isRecurring && (
                           <>
                             <span className="text-muted-foreground/50">·</span>
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">Recurring</Badge>
+                            <Badge variant="outline" className="text-xs px-1.5 py-0">Recurring</Badge>
                           </>
                         )}
                       </div>

@@ -177,15 +177,15 @@ export default function JournalHome() {
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-border bg-card p-3 paper-surface text-center">
               <div className="text-xl font-display font-bold text-foreground">{stats.total}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">entries</div>
+              <div className="text-xs text-muted-foreground mt-0.5">entries</div>
             </div>
             <div className="rounded-xl border border-border bg-card p-3 paper-surface text-center">
               <div className="text-xl font-display font-bold text-foreground">{stats.streak}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">day streak</div>
+              <div className="text-xs text-muted-foreground mt-0.5">day streak</div>
             </div>
             <div className="rounded-xl border border-border bg-card p-3 paper-surface text-center">
               <div className="text-xl font-display font-bold text-foreground">{stats.reflectionsThisMonth}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">reflections</div>
+              <div className="text-xs text-muted-foreground mt-0.5">reflections</div>
             </div>
           </div>
         )}
@@ -228,7 +228,7 @@ export default function JournalHome() {
                         <div className="rounded-xl border border-border bg-card p-4 paper-surface hover:shadow-sm transition-all cursor-pointer group">
                           <div className="flex items-start gap-3">
                             <div className="flex-shrink-0 w-10 text-center">
-                              <div className="text-[10px] text-muted-foreground uppercase">{dayName}</div>
+                              <div className="text-xs text-muted-foreground uppercase">{dayName}</div>
                               <div className="text-lg font-display font-bold text-foreground">{dayNum}</div>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -240,17 +240,17 @@ export default function JournalHome() {
                               </div>
                               <div className="flex items-center gap-2 mt-2 flex-wrap">
                                 {(entry as any).entryType === "voice" && (
-                                  <Badge variant="secondary" className="text-[10px] px-2 py-0 gap-1 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
+                                  <Badge variant="secondary" className="text-xs px-2 py-0 gap-1 bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300">
                                     <Mic className="h-2.5 w-2.5" /> Voice
                                   </Badge>
                                 )}
                                 {entry.mood && (
-                                  <Badge variant="secondary" className={`text-[10px] px-2 py-0 ${MOOD_COLORS[entry.mood] || ""}`}>
+                                  <Badge variant="secondary" className={`text-xs px-2 py-0 ${MOOD_COLORS[entry.mood] || ""}`}>
                                     {entry.mood}
                                   </Badge>
                                 )}
                                 {entry.includedInEcho && (
-                                  <Badge variant="outline" className="text-[10px] px-2 py-0 gap-1">
+                                  <Badge variant="outline" className="text-xs px-2 py-0 gap-1">
                                     <Sparkles className="h-2.5 w-2.5" /> In Echo
                                   </Badge>
                                 )}
