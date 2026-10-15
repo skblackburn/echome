@@ -3647,6 +3647,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       userResponses: null,
       status: "draft",
       linkedMemoryId: null,
+      title: typeof req.body.title === "string" && req.body.title.trim() ? req.body.title.trim().slice(0, 120) : null,
     });
 
     res.status(201).json(photoMemory);
@@ -3676,9 +3677,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!photoMemory) return res.status(404).json({ error: "Not found" });
     if (photoMemory.userId !== req.user!.id) return res.status(403).json({ error: "Not authorized" });
 
-    const { userResponses, status } = req.body;
+    const { userResponses, status, title } = req.body;
     const updates: Record<string, unknown> = {};
     if (userResponses !== undefined) updates.userResponses = userResponses;
+    if (title !== undefined) {
+      const clean = typeof title === "string" ? title.trim().slice(0, 120) : "";
+      updates.title = clean || null;
+      // Keep the linked Folder document's title in step with the photo title
+      if (photoMemory.linkedMemoryId && clean) {
+        await storage.updateMemory(photoMemory.linkedMemoryId, { title: clean });
+      }
+    }
 
     if (status === "complete") {
       updates.status = "complete";
@@ -3696,7 +3705,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const memory = await storage.createMemory({
         personaId: photoMemory.personaId,
         type: "document",
-        title: `Photo memory — ${date}`,
+        title: (updates.title as string | null) || photoMemory.title || `Photo memory — ${date}`,
         content: memoryContent.trim(),
         period: "general",
         tags: null,

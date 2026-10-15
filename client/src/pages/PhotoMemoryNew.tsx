@@ -9,6 +9,7 @@ import { Layout } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Camera, Upload, Loader2, CheckCircle2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -38,6 +39,7 @@ export default function PhotoMemoryNew() {
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [photoMemory, setPhotoMemory] = useState<PhotoMemory | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [photoTitle, setPhotoTitle] = useState("");
   const [photoDragOver, setPhotoDragOver] = useState(false);
 
   const { data: persona } = useQuery<Persona>({
@@ -61,6 +63,7 @@ export default function PhotoMemoryNew() {
       const formData = new FormData();
       formData.append("photo", file);
       formData.append("personaId", personaId);
+      if (photoTitle.trim()) formData.append("title", photoTitle.trim());
       const res = await fetch("/api/photo-memories", { method: "POST", body: formData });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -140,6 +143,19 @@ export default function PhotoMemoryNew() {
               <div className="space-y-4">
                 <div className="rounded-xl overflow-hidden border border-border">
                   <img src={previewUrl} alt="Preview" className="w-full max-h-80 object-contain bg-muted" />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="photo-title" className="text-sm font-medium text-foreground">
+                    Title <span className="text-muted-foreground font-normal">(optional)</span>
+                  </label>
+                  <Input
+                    id="photo-title"
+                    data-testid="input-photo-title"
+                    value={photoTitle}
+                    onChange={e => setPhotoTitle(e.target.value)}
+                    maxLength={120}
+                    placeholder="e.g. Summer at the lake, 1987"
+                  />
                 </div>
                 <div className="flex gap-3">
                   <Button variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()}>
@@ -257,6 +273,7 @@ export default function PhotoMemoryNew() {
                   setPreviewUrl("");
                   setPhotoMemory(null);
                   setAnswers({});
+                  setPhotoTitle("");
                 }}
               >
                 <Plus className="h-4 w-4" />

@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Pencil, Trash2, Save } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Pencil, Trash2, Save, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Persona, PhotoMemory } from "@shared/schema";
@@ -17,6 +18,8 @@ export default function PhotoMemoryDetail() {
   const { toast } = useToast();
   const [editing, setEditing] = useState(false);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const id = parseInt(params.id || "0");
 
@@ -44,6 +47,23 @@ export default function PhotoMemoryDetail() {
     },
     onError: (err: Error) => {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const titleMutation = useMutation({
+    mutationFn: async (title: string) => {
+      const res = await apiRequest("PUT", `/api/photo-memories/${id}`, { title });
+      return res.json() as Promise<PhotoMemory>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/photo-memories/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/personas/${photoMemory?.personaId}/folder`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/personas", photoMemory?.personaId, "folder"] });
+      setEditingTitle(false);
+      toast({ title: "Title saved" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't save title", description: err.message, variant: "destructive" });
     },
   });
 
@@ -122,6 +142,49 @@ export default function PhotoMemoryDetail() {
             alt="Photo memory"
             className="w-full max-h-96 object-contain bg-muted"
           />
+        </div>
+
+        {/* Title */}
+        <div className="min-h-[2.5rem] flex items-center gap-2">
+          {editingTitle ? (
+            <>
+              <Input
+                autoFocus
+                data-testid="input-photo-title"
+                value={titleDraft}
+                maxLength={120}
+                onChange={e => setTitleDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") titleMutation.mutate(titleDraft);
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+                placeholder="Give this photo a title"
+                className="text-base font-semibold"
+              />
+              <Button size="icon" className="h-9 w-9 flex-shrink-0" onClick={() => titleMutation.mutate(titleDraft)} disabled={titleMutation.isPending} aria-label="Save title" data-testid="button-save-title">
+                {titleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              </Button>
+              <Button size="icon" variant="outline" className="h-9 w-9 flex-shrink-0" onClick={() => setEditingTitle(false)} aria-label="Cancel" data-testid="button-cancel-title">
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <h1 className="font-display text-xl font-semibold text-foreground truncate" data-testid="text-photo-title">
+                {photoMemory.title || "Untitled photo"}
+              </h1>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-muted-foreground flex-shrink-0"
+                onClick={() => { setTitleDraft(photoMemory.title || ""); setEditingTitle(true); }}
+                data-testid="button-edit-title"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {photoMemory.title ? "Rename" : "Add title"}
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Meta */}

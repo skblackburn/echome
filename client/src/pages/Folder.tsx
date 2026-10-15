@@ -60,8 +60,10 @@ function TypeIcon({ type }: { type: string }) {
 
 function TimelineItem({ item, personaId }: { item: any; personaId: number }) {
   const type = item._type;
-  const title = item.title || item.content?.slice(0, 60) || "Untitled";
   const date = item._sortDate ? new Date(item._sortDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
+  const title = type === "photo"
+    ? (item.title || `Photo from ${date}`)
+    : (item.title || item.content?.slice(0, 60) || "Untitled");
 
   let href = "";
   if (type === "letter") href = `/persona/${personaId}/folder/letter/${item.id}`;
@@ -72,9 +74,18 @@ function TimelineItem({ item, personaId }: { item: any; personaId: number }) {
   return (
     <Link href={href}>
       <div className="flex items-center gap-4 px-4 py-4 rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/20 transition-all cursor-pointer group paper-surface">
-        <div className="p-2.5 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
-          <TypeIcon type={type} />
-        </div>
+        {type === "photo" ? (
+          <img
+            src={`${API_BASE}/api/photo-memories/photo/${item.id}`}
+            alt=""
+            loading="lazy"
+            className="h-11 w-11 rounded-lg object-cover bg-muted flex-shrink-0"
+          />
+        ) : (
+          <div className="p-2.5 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors flex-shrink-0">
+            <TypeIcon type={type} />
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-foreground truncate leading-snug">{title}</div>
           <div className="flex items-center flex-wrap gap-2 mt-1.5">

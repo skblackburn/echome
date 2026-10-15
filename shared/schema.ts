@@ -339,6 +339,7 @@ export const photoMemories = pgTable("photo_memories", {
   personaId: integer("persona_id").notNull(),
   photoUrl: text("photo_url").notNull(),
   photoThumbnailUrl: text("photo_thumbnail_url"),
+  title: text("title"),
   aiPrompts: jsonb("ai_prompts"), // array of generated questions
   userResponses: jsonb("user_responses"), // array of {question, answer} pairs
   status: text("status").notNull().default("draft"),

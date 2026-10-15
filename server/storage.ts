@@ -393,6 +393,7 @@ export async function initDb() {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     )`;
+  await client`ALTER TABLE photo_memories ADD COLUMN IF NOT EXISTS title TEXT`.catch(() => {});
 
   // ── The Folder: extend future_letters + new tables ──────────────────────
   await client`ALTER TABLE future_letters ADD COLUMN IF NOT EXISTS persona_id INTEGER`.catch(() => {});
