@@ -26,7 +26,8 @@ import { cn } from "@/lib/utils";
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 // ── Adaptive pronoun helper ───────────────────────────────────────────────────
-function pro(isSelf: boolean, they: string, you: string) {
+// Call as pro(isSelf, youText, theyText). The first option is shown when the Echo is about the user.
+function pro(isSelf: boolean, you: string, they: string) {
   return isSelf ? you : they;
 }
 
@@ -1050,7 +1051,9 @@ export default function EchoCreate() {
     },
   });
 
-  const isSelf = persona?.relationship === "myself";
+  const isSelf = persona?.relationship === "myself" || persona?.selfMode === true;
+  const lastOtherRelationship = useRef<string | null>(null);
+  const [switchingWho, setSwitchingWho] = useState(false);
 
   const saveTraits = useCallback(async (traits: { category: string; content: string }[]) => {
     const filtered = traits.filter(t => t.content.trim());
@@ -1070,6 +1073,31 @@ export default function EchoCreate() {
       body: JSON.stringify({ bio }),
     });
   }, [personaId]);
+
+  // "Who is this Echo about?" — switches wording between you/your and they/their
+  // by updating the persona itself, so the rest of the app agrees.
+  const setAboutWho = async (self: boolean) => {
+    if (!persona || self === isSelf || switchingWho) return;
+    if (!isSelf && persona.relationship) lastOtherRelationship.current = persona.relationship;
+    const body = self
+      ? { relationship: "myself", selfMode: true }
+      : { relationship: lastOtherRelationship.current && lastOtherRelationship.current !== "myself" ? lastOtherRelationship.current : "other", selfMode: false };
+    setSwitchingWho(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/personas/${personaId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      await queryClient.invalidateQueries({ queryKey: ["/api/personas"] });
+      toast({ title: self ? "Now answering about you" : "Now answering about someone else" });
+    } catch {
+      toast({ title: "Couldn't switch just now", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setSwitchingWho(false);
+    }
+  };
 
   const saveLater = () => {
     toast({ title: "Progress saved", description: "You can continue from the profile anytime." });
@@ -1169,6 +1197,35 @@ export default function EchoCreate() {
 
   return (
     <Layout backTo={`/persona/${personaId}`} backLabel="Profile" title={`${firstName}'s Echo`}>
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-6">
+        <div className="rounded-xl border border-border bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <div>
+            <div className="text-sm font-medium text-foreground">Who is this Echo about?</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              {isSelf ? "Questions ask about you." : "Questions ask about someone else."} Change this any time.
+            </div>
+          </div>
+          <div role="radiogroup" aria-label="Who is this Echo about" className="inline-flex rounded-lg bg-muted p-1 flex-shrink-0">
+            {([{ self: true, label: "Me" }, { self: false, label: "Someone else" }] as const).map(opt => (
+              <button
+                key={opt.label}
+                type="button"
+                role="radio"
+                aria-checked={isSelf === opt.self}
+                disabled={switchingWho}
+                onClick={() => setAboutWho(opt.self)}
+                data-testid={opt.self ? "toggle-about-me" : "toggle-about-other"}
+                className={cn(
+                  "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  isSelf === opt.self ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       {step === 1 && <Step1 persona={persona} isSelf={isSelf} initial={step1Data} onComplete={completeStep1} onSaveLater={saveLater} />}
       {step === 2 && <Step2 persona={persona} isSelf={isSelf} initial={step2Data} onComplete={completeStep2} onBack={() => setStep(1)} onSaveLater={saveLater} />}
       {step === 3 && <Step3 persona={persona} isSelf={isSelf} initial={step3Data} onComplete={completeStep3} onBack={() => setStep(2)} onSaveLater={saveLater} />}
